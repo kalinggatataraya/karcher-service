@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kärcher Service Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ════════════════════════════════════════
+   TOKENS
+════════════════════════════════════════ */
+:root {
+  --y:   #FFD700;
+  --y2:  #FFC200;
+  --y3:  #E6AD00;
+  --yd:  rgba(255,215,0,0.12);
+  --yd2: rgba(255,215,0,0.22);
+  --bg:  #111318;
+  --bg2: #181b22;
+  --bg3: #1e2230;
+  --bg4: #252a3a;
+  --bg5: #2d3347;
+  --b1:  rgba(255,255,255,0.06);
+  --b2:  rgba(255,255,255,0.10);
+  --b3:  rgba(255,255,255,0.16);
+  --t1:  #f0f2f8;
+  --t2:  #9099b2;
+  --t3:  #555d78;
+  --red:     #ff5a5a;
+  --red-d:   rgba(255,90,90,0.12);
+  --green:   #3ecf8e;
+  --green-d: rgba(62,207,142,0.12);
+  --blue:    #5ab4ff;
+  --blue-d:  rgba(90,180,255,0.12);
+  --orange:  #ff9f40;
+  --orange-d:rgba(255,159,64,0.12);
+  --r: 8px; --r2: 12px; --r3: 18px;
+  --font: 'Barlow', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --cond: 'Barlow Condensed', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.5; overflow: hidden; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 4px; }
+
+/* ════════════════════════════════════════
+   PAGES
+════════════════════════════════════════ */
+.page { display: none; height: 100vh; overflow: hidden; flex-direction: column; }
+.page.active { display: flex; }
+
+/* ════════════════════════════════════════
+   ── CUSTOMER PORTAL ──
+════════════════════════════════════════ */
+#pg-customer {
+  background: var(--bg);
+  align-items: center; justify-content: flex-start;
+  overflow-y: auto;
+}
+.cust-hero {
+  width: 100%; background: var(--bg2);
+  border-bottom: 1px solid var(--b2);
+  padding: 18px 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.k-logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.k-logo .box {
+  background: var(--y); color: var(--bg);
+  font-family: var(--cond); font-size: 22px; font-weight: 800;
+  padding: 5px 10px; letter-spacing: -.01em;
+  border-radius: 4px;
+}
+.k-logo .sub { font-family: var(--cond); font-size: 13px; font-weight: 500; color: var(--t2); letter-spacing: .06em; text-transform: uppercase; }
+.cust-hero .sep { flex: 1; }
+.cust-hero .admin-link {
+  font-size: 12px; color: var(--t3); cursor: pointer; padding: 6px 12px;
+  border: 1px solid var(--b2); border-radius: var(--r); transition: all .2s;
+  font-weight: 500;
+}
+.cust-hero .admin-link:hover { color: var(--y); border-color: var(--yd2); background: var(--yd); }
+
+.cust-body { width: 100%; max-width: 680px; margin: 0 auto; padding: 40px 20px 60px; }
+.cust-title { font-family: var(--cond); font-size: 36px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 6px; }
+.cust-title span { color: var(--y); }
+.cust-sub { color: var(--t2); font-size: 15px; margin-bottom: 32px; }
+
+.search-card {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r3); padding: 28px; margin-bottom: 28px;
+}
+.search-row { display: flex; gap: 10px; }
+.search-row input {
+  flex: 1; background: var(--bg3); border: 1.5px solid var(--b2);
+  border-radius: var(--r); color: var(--t1);
+  font-family: var(--font); font-size: 16px; font-weight: 500;
+  padding: 12px 16px; outline: none; transition: all .2s;
+  letter-spacing: .04em;
+}
+.search-row input::placeholder { color: var(--t3); font-weight: 400; font-size: 14px; }
+.search-row input:focus { border-color: var(--y); box-shadow: 0 0 0 3px var(--yd); }
+.btn-search {
+  background: var(--y); color: var(--bg);
+  font-family: var(--cond); font-size: 15px; font-weight: 700;
+  padding: 12px 24px; border: none; border-radius: var(--r);
+  cursor: pointer; letter-spacing: .03em; transition: all .18s; white-space: nowrap;
+}
+.btn-search:hover { background: var(--y2); transform: translateY(-1px); }
+.btn-search:active { transform: translateY(0); }
+
+/* ticket result */
+.ticket-result { animation: fadeUp .3s ease; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } }
+
+.tc-header {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r3) var(--r3) 0 0;
+  padding: 22px 24px 18px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.tc-id { font-family: var(--mono); font-size: 12px; color: var(--y); background: var(--yd); padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 6px; }
+.tc-machine { font-family: var(--cond); font-size: 22px; font-weight: 700; }
+.tc-customer { font-size: 13px; color: var(--t2); margin-top: 3px; }
+.tc-status-badge { margin-left: auto; flex-shrink: 0; }
+
+.status-badge {
+  font-family: var(--cond); font-size: 13px; font-weight: 700;
+  padding: 6px 14px; border-radius: 20px; letter-spacing: .05em; text-transform: uppercase;
+}
+.s-received   { background: var(--blue-d);   color: var(--blue);   border: 1px solid rgba(90,180,255,.3); }
+.s-diagnosing { background: var(--orange-d); color: var(--orange); border: 1px solid rgba(255,159,64,.3); }
+.s-repairing  { background: var(--yd);       color: var(--y);      border: 1px solid rgba(255,215,0,.3); }
+.s-testing    { background: rgba(167,139,250,.12); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
+.s-done       { background: var(--green-d);  color: var(--green);  border: 1px solid rgba(62,207,142,.3); }
+.s-delivered  { background: var(--b1);       color: var(--t3);     border: 1px solid var(--b2); }
+.s-onsite     { background: rgba(255,90,90,.12); color: var(--red); border: 1px solid rgba(255,90,90,.3); }
+
+.tc-progress {
+  background: var(--bg2); border-left: 1px solid var(--b2); border-right: 1px solid var(--b2);
+  padding: 20px 24px;
+}
+.progress-steps { display: flex; align-items: center; gap: 0; }
+.ps { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+.ps-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; z-index: 2;
+  background: var(--bg4); color: var(--t3); border: 2px solid var(--b2);
+  transition: all .3s;
+}
+.ps.done .ps-dot   { background: var(--green); color: var(--bg); border-color: var(--green); }
+.ps.active .ps-dot { background: var(--y); color: var(--bg); border-color: var(--y); box-shadow: 0 0 12px var(--yd2); }
+.ps-line { position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: var(--b2); z-index: 1; }
+.ps.done .ps-line { background: var(--green); }
+.ps:last-child .ps-line { display: none; }
+.ps-label { font-size: 10px; color: var(--t3); margin-top: 6px; text-align: center; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.ps.done .ps-label   { color: var(--green); }
+.ps.active .ps-label { color: var(--y); }
+
+.tc-details {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: 0 0 var(--r3) var(--r3);
+  padding: 20px 24px;
+}
+.tc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.tc-field label { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .07em; display: block; margin-bottom: 4px; }
+.tc-field span { font-size: 14px; color: var(--t1); font-weight: 500; }
+
+.timeline { border-top: 1px solid var(--b1); padding-top: 16px; margin-top: 4px; }
+.tl-title { font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px; }
+.tl-item { display: flex; gap: 12px; margin-bottom: 12px; }
+.tl-dot-col { display: flex; flex-direction: column; align-items: center; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--y); margin-top: 4px; flex-shrink: 0; }
+.tl-vline { width: 1px; background: var(--b2); flex: 1; min-height: 12px; margin-top: 4px; }
+.tl-item:last-child .tl-vline { display: none; }
+.tl-text { flex: 1; }
+.tl-action { font-size: 13px; font-weight: 500; }
+.tl-time { font-size: 11px; color: var(--t3); font-family: var(--mono); margin-top: 2px; }
+.tl-note { font-size: 12px; color: var(--t2); margin-top: 3px; font-style: italic; }
+
+.no-result { text-align: center; padding: 40px 20px; }
+.no-result .icon { font-size: 48px; margin-bottom: 12px; }
+.no-result h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.no-result p { color: var(--t2); font-size: 14px; }
+
+/* ════════════════════════════════════════
+   ── ADMIN LAYOUT ──
+════════════════════════════════════════ */
+#pg-admin { flex-direction: row; }
+
+/* sidebar */
+.sidebar {
+  width: 220px; background: var(--bg2); border-right: 1px solid var(--b2);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+}
+.sb-logo {
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid var(--b2);
+  display: flex; align-items: center; gap: 10px;
+}
+.sb-logo .kbox { background: var(--y); color: var(--bg); font-family: var(--cond); font-size: 16px; font-weight: 800; padding: 3px 7px; border-radius: 3px; }
+.sb-logo .ktxt { font-family: var(--cond); font-size: 11px; font-weight: 600; color: var(--t2); letter-spacing: .07em; text-transform: uppercase; line-height: 1.3; }
+
+.sb-section { padding: 10px 10px 4px; font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .09em; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; margin: 2px 8px; border-radius: var(--r);
+  cursor: pointer; color: var(--t2); font-weight: 500; font-size: 13px;
+  transition: all .18s; border: none; background: none; width: calc(100% - 16px); text-align: left;
+}
+.nav-item .ico { font-size: 15px; width: 18px; text-align: center; }
+.nav-item:hover { background: var(--b1); color: var(--t1); }
+.nav-item.on { background: var(--yd); color: var(--y); font-weight: 600; }
+.sb-bottom { margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--b2); }
+.sb-user { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); cursor: pointer; }
+.sb-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--y); color: var(--bg); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+.sb-uname { font-size: 13px; font-weight: 600; }
+.sb-role { font-size: 10px; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; }
+.portal-link { display: flex; align-items: center; gap: 8px; padding: 8px 14px; margin: 0 8px 8px; border-radius: var(--r); cursor: pointer; color: var(--t3); font-size: 12px; transition: all .18s; border: 1px dashed var(--b2); }
+.portal-link:hover { color: var(--y); border-color: var(--yd2); background: var(--yd); }
+
+/* main content */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 54px; background: var(--bg2); border-bottom: 1px solid var(--b2);
+  display: flex; align-items: center; padding: 0 22px; gap: 14px; flex-shrink: 0;
+}
+.topbar-title { font-family: var(--cond); font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.topbar .sep { flex: 1; }
+.tb-search {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg3); border: 1px solid var(--b2); border-radius: var(--r);
+  padding: 6px 12px; width: 220px;
+}
+.tb-search input { background: none; border: none; outline: none; color: var(--t1); font-size: 13px; font-family: var(--font); width: 100%; }
+.tb-search input::placeholder { color: var(--t3); }
+.tb-search .si { color: var(--t3); font-size: 14px; }
+
+/* content areas */
+.content { flex: 1; overflow-y: auto; padding: 20px 22px; }
+
+/* ── dashboard ── */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r2); padding: 16px 18px;
+  position: relative; overflow: hidden;
+}
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.kpi.yellow::before { background: var(--y); }
+.kpi.green::before  { background: var(--green); }
+.kpi.blue::before   { background: var(--blue); }
+.kpi.red::before    { background: var(--red); }
+.kpi-label { font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+.kpi-val { font-family: var(--cond); font-size: 34px; font-weight: 800; line-height: 1; }
+.kpi-sub { font-size: 11px; color: var(--t2); margin-top: 5px; }
+.kpi-icon { position: absolute; bottom: 12px; right: 14px; font-size: 28px; opacity: .15; }
+
+.dash-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; }
+.card { background: var(--bg2); border: 1px solid var(--b2); border-radius: var(--r2); }
+.card-hd { padding: 14px 18px; border-bottom: 1px solid var(--b1); display: flex; align-items: center; gap: 10px; }
+.card-hd h3 { font-family: var(--cond); font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+.card-hd .sep { flex: 1; }
+.card-hd .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 700; font-family: var(--mono); }
+.card-body { padding: 14px 18px; }
+
+/* ── table ── */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; border-bottom: 1px solid var(--b2); text-align: left; white-space: nowrap; }
+.tbl td { padding: 11px 12px; border-bottom: 1px solid var(--b1); font-size: 13px; vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--b1); }
+.tbl .mono { font-family: var(--mono); font-size: 11px; color: var(--y); }
+.tbl .muted { color: var(--t2); font-size: 12px; }
+.tbl .bold { font-weight: 600; }
+.tech-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--bg4); color: var(--t2);
+}
+.tech-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* ── productivity ── */
+.tech-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.tech-card {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r2); padding: 16px; transition: border-color .2s;
+}
+.tech-card:hover { border-color: var(--b3); }
+.tc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.tc-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; font-family: var(--cond); flex-shrink: 0; }
+.tc-name { font-weight: 700; font-size: 15px; }
+.tc-pos { font-size: 11px; color: var(--t2); margin-top: 2px; }
+.tc-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.tc-stat { text-align: center; background: var(--bg3); border-radius: var(--r); padding: 8px 4px; }
+.tc-stat-v { font-family: var(--cond); font-size: 20px; font-weight: 700; }
+.tc-stat-l { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+.bar-wrap { margin-top: 12px; }
+.bar-lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--t2); margin-bottom: 5px; }
+.bar-bg { background: var(--bg4); border-radius: 4px; height: 6px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: var(--y); transition: width .6s cubic-bezier(.4,0,.2,1); }
+
+/* ── ticket form / modal ── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  z-index: 1000; display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--b3);
+  border-radius: var(--r3); width: 100%; max-width: 600px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 32px 80px rgba(0,0,0,.6);
+  animation: modalIn .25s ease;
+}
+@keyframes modalIn { from { opacity:0; transform: scale(.95) translateY(10px); } }
+.modal-hd { padding: 20px 24px 16px; border-bottom: 1px solid var(--b2); display: flex; align-items: center; gap: 10px; }
+.modal-hd h2 { font-family: var(--cond); font-size: 20px; font-weight: 700; flex: 1; }
+.modal-close { background: none; border: none; color: var(--t2); font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: var(--r); transition: all .18s; }
+.modal-close:hover { color: var(--red); background: var(--red-d); }
+.modal-body { padding: 20px 24px; }
+.modal-footer { padding: 14px 24px; border-top: 1px solid var(--b2); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* forms */
+.f-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.f-row:last-child { margin-bottom: 0; }
+.f-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.f-label { font-size: 11px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: .07em; }
+input[type=text], input[type=date], input[type=time], select, textarea {
+  background: var(--bg3); border: 1.5px solid var(--b2);
+  border-radius: var(--r); color: var(--t1);
+  font-family: var(--font); font-size: 13px; padding: 9px 12px;
+  width: 100%; outline: none; transition: all .18s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--y); box-shadow: 0 0 0 3px var(--yd); }
+input::placeholder, textarea::placeholder { color: var(--t3); }
+select option { background: var(--bg3); }
+textarea { resize: vertical; min-height: 80px; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 18px; border-radius: var(--r); font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--b2); background: var(--bg3); color: var(--t1); transition: all .18s; white-space: nowrap; }
+.btn:hover { background: var(--bg4); border-color: var(--b3); }
+.btn:active { transform: scale(.97); }
+.btn-y { background: var(--y); color: var(--bg); border-color: var(--y); font-weight: 700; }
+.btn-y:hover { background: var(--y2); border-color: var(--y2); }
+.btn-green { background: var(--green-d); color: var(--green); border-color: rgba(62,207,142,.3); }
+.btn-green:hover { background: rgba(62,207,142,.2); }
+.btn-red { background: var(--red-d); color: var(--red); border-color: rgba(255,90,90,.3); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-icon { padding: 6px 9px; border-radius: var(--r); font-size: 14px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── site visit ── */
+.visit-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.visit-card {
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r2); padding: 16px; transition: all .2s;
+}
+.visit-card:hover { border-color: var(--b3); }
+.vc-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.vc-icon { width: 36px; height: 36px; border-radius: var(--r); background: var(--yd); color: var(--y); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.vc-title { font-weight: 700; font-size: 14px; }
+.vc-id { font-family: var(--mono); font-size: 10px; color: var(--y); margin-top: 3px; }
+.vc-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vc-field label { font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 3px; }
+.vc-field span { font-size: 12px; color: var(--t2); }
+
+/* ── toast ── */
+#toasts { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  padding: 12px 18px; border-radius: var(--r2); font-size: 13px; font-weight: 500;
+  background: var(--bg3); color: var(--t1); border: 1px solid var(--b2);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4); animation: toastIn .22s ease;
+  display: flex; align-items: center; gap: 10px; min-width: 260px;
+}
+.toast.ok   { border-left: 3px solid var(--green); }
+.toast.err  { border-left: 3px solid var(--red); }
+.toast.info { border-left: 3px solid var(--y); }
+@keyframes toastIn { from { opacity:0; transform: translateX(20px); } }
+
+/* ── filter row ── */
+.filter-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.filter-row .sep { flex: 1; }
+.filter-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--b2); background: var(--bg3); color: var(--t2);
+  transition: all .18s;
+}
+.filter-chip:hover { border-color: var(--b3); color: var(--t1); }
+.filter-chip.on { background: var(--yd); color: var(--y); border-color: var(--yd2); }
+
+/* ── empty ── */
+.empty-row td { text-align: center; padding: 32px; color: var(--t3); font-style: italic; }
+
+/* ── stats chart (css bars) ── */
+.mini-chart { display: flex; align-items: flex-end; gap: 4px; height: 60px; padding: 0 4px; }
+.mc-bar { flex: 1; background: var(--yd); border-radius: 3px 3px 0 0; min-height: 4px; transition: background .2s; cursor: default; position: relative; }
+.mc-bar:hover { background: var(--y); }
+.mc-bar::after { content: attr(data-val); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--t3); white-space: nowrap; padding-bottom: 2px; opacity: 0; transition: opacity .2s; }
+.mc-bar:hover::after { opacity: 1; }
+
+/* ════════════════════════════════════════
+   ── LOGIN PAGE ──
+════════════════════════════════════════ */
+#pg-login {
+  background: var(--bg);
+  align-items: center; justify-content: center;
+}
+.login-wrap {
+  width: 100%; max-width: 420px; padding: 24px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.login-card {
+  width: 100%;
+  background: var(--bg2); border: 1px solid var(--b2);
+  border-radius: var(--r3); padding: 36px 32px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.5);
+}
+.login-logo {
+  display: flex; align-items: center; gap: 12px;
+  justify-content: center; margin-bottom: 28px;
+}
+.login-logo .kbox {
+  background: var(--y); color: var(--bg);
+  font-family: var(--cond); font-size: 24px; font-weight: 800;
+  padding: 6px 12px; border-radius: 5px;
+}
+.login-logo .ktxt {
+  font-family: var(--cond); font-size: 13px; font-weight: 600;
+  color: var(--t2); letter-spacing: .07em; text-transform: uppercase; line-height: 1.4;
+}
+.login-title {
+  font-family: var(--cond); font-size: 22px; font-weight: 700;
+  color: var(--t1); text-align: center; margin-bottom: 6px;
+}
+.login-sub {
+  font-size: 13px; color: var(--t3); text-align: center; margin-bottom: 28px;
+}
+.login-field { margin-bottom: 16px; }
+.login-field label {
+  display: block; font-size: 11px; font-weight: 700;
+  color: var(--t2); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px;
+}
+.login-field input {
+  width: 100%; background: var(--bg3); border: 1.5px solid var(--b2);
+  border-radius: var(--r); color: var(--t1);
+  font-family: var(--font); font-size: 14px; font-weight: 500;
+  padding: 11px 14px; outline: none; transition: all .2s;
+}
+.login-field input:focus { border-color: var(--y); box-shadow: 0 0 0 3px var(--yd); }
+.login-field input::placeholder { color: var(--t3); font-weight: 400; }
+.btn-login {
+  width: 100%; background: var(--y); color: var(--bg);
+  font-family: var(--cond); font-size: 16px; font-weight: 800;
+  padding: 13px; border: none; border-radius: var(--r);
+  cursor: pointer; letter-spacing: .03em; transition: all .18s;
+  margin-top: 6px;
+}
+.btn-login:hover { background: var(--y2); transform: translateY(-1px); }
+.btn-login:active { transform: translateY(0); }
+.login-error {
+  display: none; margin-top: 14px;
+  background: var(--red-d); color: var(--red);
+  border: 1px solid rgba(255,90,90,.3); border-radius: var(--r);
+  padding: 10px 14px; font-size: 13px; font-weight: 500; text-align: center;
+}
+.login-error.show { display: block; }
+.login-back {
+  margin-top: 20px; font-size: 12px; color: var(--t3);
+  cursor: pointer; text-align: center; transition: color .2s;
+}
+.login-back:hover { color: var(--t2); }
+.login-hint {
+  margin-top: 16px; padding: 12px 14px;
+  background: var(--bg3); border: 1px solid var(--b1);
+  border-radius: var(--r); font-size: 11px; color: var(--t3);
+  text-align: center; line-height: 1.7;
+}
+.login-locked {
+  display:none; text-align:center; padding: 20px 0;
+  color: var(--red); font-size: 13px; font-weight: 500;
+}
+.login-locked.show { display: block; }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     CUSTOMER PORTAL
+══════════════════════════════════ -->
+<div class="page active" id="pg-customer">
+  <div class="cust-hero">
+    <div class="k-logo">
+      <div class="box">KÄRCHER</div>
+      <div class="sub">Service Center<br>Customer Portal</div>
+    </div>
+    <div class="sep"></div>
+    <div style="font-size:12px;color:var(--t3);display:flex;align-items:center;gap:8px">
+      <span>📞 Need help?</span>
+      <a href="tel:+62211234567" style="color:var(--y);text-decoration:none;font-weight:600">021-1234567</a>
+    </div>
+  </div>
+  <div class="cust-body">
+    <div class="cust-title">Track Your <span>Service</span> Status</div>
+    <div class="cust-sub">Enter your service ticket number to check the repair progress of your machine.</div>
+
+    <div class="search-card">
+      <div style="font-size:12px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Service Ticket Number</div>
+      <div class="search-row">
+        <input type="text" id="cust-search" placeholder="e.g. SVC-2025-0042" maxlength="20" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')trackTicket()"/>
+        <button class="btn-search" onclick="trackTicket()">Track Now</button>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-top:10px">💡 Your ticket number was given when you dropped off your machine at our service center.</div>
+    </div>
+
+    <div id="cust-result"></div>
+
+    <div style="margin-top:40px;padding:20px;background:var(--bg2);border:1px solid var(--b2);border-radius:var(--r3)">
+      <div style="font-family:var(--cond);font-size:16px;font-weight:700;margin-bottom:12px">Service Status Guide</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-received">Received</span><span style="font-size:11px;color:var(--t2)">Machine registered</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-diagnosing">Diagnosing</span><span style="font-size:11px;color:var(--t2)">Finding the issue</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-repairing">Repairing</span><span style="font-size:11px;color:var(--t2)">Active repair</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-testing">Testing</span><span style="font-size:11px;color:var(--t2)">Quality check</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-done">Ready</span><span style="font-size:11px;color:var(--t2)">Pickup anytime</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-delivered">Delivered</span><span style="font-size:11px;color:var(--t2)">Completed</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════ -->
+<div class="page" id="pg-login">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="kbox">KÄRCHER</div>
+        <div class="ktxt">Service Center<br>Staff Portal</div>
+      </div>
+      <div class="login-title">Staff Login</div>
+      <div class="login-sub">Restricted access — authorized personnel only</div>
+
+      <div id="login-form-area">
+        <div class="login-field">
+          <label>Username</label>
+          <input type="text" id="login-user" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"/>
+        </div>
+        <div class="login-field">
+          <label>Password</label>
+          <input type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <button class="btn-login" onclick="doLogin()">🔐 Login</button>
+        <div class="login-error" id="login-error"></div>
+      </div>
+
+      <div class="login-locked" id="login-locked">
+        🔒 Terlalu banyak percobaan.<br>Coba lagi dalam <span id="lockout-timer">30</span> detik.
+      </div>
+
+      <div class="login-hint">
+        🔒 Akses terbatas. Hubungi administrator jika Anda lupa kredensial.<br>
+        <span style="color:var(--t3);font-size:10px">Restricted access — staff personnel only</span>
+      </div>
+    </div>
+    <div class="login-back" onclick="goCustomer()">← Kembali ke Customer Portal</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     ADMIN PANEL
+══════════════════════════════════ -->
+<div class="page" id="pg-admin">
+
+  <!-- sidebar -->
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="kbox">K</div>
+      <div class="ktxt">Kärcher<br>Service Mgmt</div>
+    </div>
+
+    <div class="sb-section">Workshop</div>
+    <button class="nav-item on" onclick="goView('dashboard',this)"><span class="ico">📊</span> Dashboard</button>
+    <button class="nav-item" onclick="goView('tickets',this)"><span class="ico">🎫</span> Service Tickets</button>
+    <button class="nav-item" onclick="goView('new-ticket',this)"><span class="ico">➕</span> New Ticket</button>
+
+    <div class="sb-section">Field</div>
+    <button class="nav-item" onclick="goView('site-visits',this)"><span class="ico">🚐</span> Site Visits</button>
+    <button class="nav-item" onclick="goView('new-visit',this)"><span class="ico">📍</span> New Visit</button>
+
+    <div class="sb-section">Team</div>
+    <button class="nav-item" onclick="goView('productivity',this)"><span class="ico">📈</span> Productivity</button>
+    <button class="nav-item" onclick="goView('technicians',this)"><span class="ico">👷</span> Technicians</button>
+    <button class="nav-item" onclick="goView('settings',this)"><span class="ico">⚙️</span> Settings</button>
+
+    <div style="margin-top:10px;padding:0 10px 6px">
+      <div class="portal-link" onclick="goCustomer()">🔗 Customer Portal</div>
+    </div>
+
+    <div class="sb-bottom">
+      <div class="sb-user" id="sb-user-info">
+        <div class="sb-avatar" id="sb-avatar-letter">A</div>
+        <div>
+          <div class="sb-uname" id="sb-uname-text">Admin</div>
+          <div class="sb-role" id="sb-role-text">Service Manager</div>
+        </div>
+      </div>
+      <button class="nav-item" style="color:var(--red);margin-top:4px" onclick="doLogout()">
+        <span class="ico">🚪</span> Logout
+      </button>
+    </div>
+  </div>
+
+  <!-- main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="view-title">Dashboard</div>
+      <div class="sep"></div>
+      <div class="tb-search">
+        <span class="si">🔍</span>
+        <input type="text" placeholder="Search tickets…" id="global-search" oninput="globalSearch(this.value)"/>
+      </div>
+      <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
+    </div>
+
+    <div class="content" id="main-content">
+      <!-- views injected here -->
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODALS
+══════════════════════════════════ -->
+
+<!-- New / Edit Ticket Modal -->
+<div class="modal-bg" id="modal-ticket">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2 id="modal-ticket-title">New Service Ticket</h2>
+      <button class="modal-close" onclick="closeModal('modal-ticket')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Customer Name *</div><input type="text" id="f-customer" placeholder="Full name or company"/></div>
+        <div class="f-row"><div class="f-label">Phone / WhatsApp</div><input type="text" id="f-phone" placeholder="+62 812…"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Machine Model *</div><input type="text" id="f-machine" placeholder="e.g. Kärcher K5 Premium, HD 7/18, T 300"/></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Serial Number</div><input type="text" id="f-serial" placeholder="S/N from machine label"/></div>
+        <div class="f-row"><div class="f-label">Machine Type</div>
+          <select id="f-mactype">
+            <option>Pressure Washer</option><option>Vacuum Cleaner</option><option>Steam Cleaner</option>
+            <option>Floor Scrubber</option><option>Sweeper</option><option>Wet/Dry Vacuum</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="f-row"><div class="f-label">Problem Description *</div><textarea id="f-problem" placeholder="Describe the issue the customer reported…"></textarea></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Assign Technician</div>
+          <select id="f-tech">
+            <option value="">— Unassigned —</option>
+          </select>
+        </div>
+        <div class="f-row"><div class="f-label">Priority</div>
+          <select id="f-priority">
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div class="f-row"><div class="f-label">Internal Notes</div><textarea id="f-notes" placeholder="Notes for technician (not visible to customer)…" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ticket')">Cancel</button>
+      <button class="btn btn-y" onclick="saveTicket()" id="save-ticket-btn">Create Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal-bg" id="modal-status">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hd">
+      <h2>Update Ticket Status</h2>
+      <button class="modal-close" onclick="closeModal('modal-status')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="f-row"><div class="f-label">Ticket</div><div id="status-ticket-id" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
+      <div class="f-row"><div class="f-label">New Status</div>
+        <select id="f-status">
+          <option value="received">Received</option>
+          <option value="diagnosing">Diagnosing</option>
+          <option value="repairing">Repairing</option>
+          <option value="testing">Testing / QC</option>
+          <option value="done">Done — Ready for Pickup</option>
+          <option value="delivered">Delivered</option>
+        </select>
+      </div>
+      <div class="f-row"><div class="f-label">Update Note</div><textarea id="f-status-note" placeholder="What was done / findings…" style="min-height:80px"></textarea></div>
+      <div class="f-row"><div class="f-label">Assign Technician</div><select id="f-status-tech"><option value="">— Keep current —</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-status')">Cancel</button>
+      <button class="btn btn-y" onclick="saveStatus()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Site Visit Modal -->
+<div class="modal-bg" id="modal-visit">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2 id="modal-visit-title">New Site Visit</h2>
+      <button class="modal-close" onclick="closeModal('modal-visit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Customer Name *</div><input type="text" id="v-customer" placeholder="Company / individual"/></div>
+        <div class="f-row"><div class="f-label">Contact Phone</div><input type="text" id="v-phone" placeholder="+62 812…"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Site Address *</div><input type="text" id="v-address" placeholder="Full address of site"/></div>
+      <div class="f-row"><div class="f-label">Machine / Equipment</div><input type="text" id="v-machine" placeholder="Machine model or description"/></div>
+      <div class="f-row"><div class="f-label">Job Description *</div><textarea id="v-desc" placeholder="What needs to be done on-site…"></textarea></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Visit Date</div><input type="date" id="v-date"/></div>
+        <div class="f-row"><div class="f-label">Scheduled Time</div><input type="time" id="v-time" value="09:00"/></div>
+      </div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Assign Technician</div><select id="v-tech"><option value="">— Unassigned —</option></select></div>
+        <div class="f-row"><div class="f-label">Visit Type</div>
+          <select id="v-type">
+            <option value="repair">On-site Repair</option>
+            <option value="maintenance">Preventive Maintenance</option>
+            <option value="installation">Installation</option>
+            <option value="inspection">Inspection</option>
+            <option value="demo">Demo / Training</option>
+          </select>
+        </div>
+      </div>
+      <div class="f-row"><div class="f-label">Notes</div><textarea id="v-notes" placeholder="Bring spare parts, access requirements…" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-visit')">Cancel</button>
+      <button class="btn btn-y" onclick="saveVisit()">Schedule Visit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Technician Modal -->
+<div class="modal-bg" id="modal-tech">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hd">
+      <h2 id="modal-tech-title">Add Technician</h2>
+      <button class="modal-close" onclick="closeModal('modal-tech')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="f-row"><div class="f-label">Full Name *</div><input type="text" id="t-name" placeholder="Technician name"/></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Specialization</div>
+          <select id="t-spec">
+            <option>Pressure Washer</option><option>Industrial</option><option>All Types</option><option>Electrical</option>
+          </select>
+        </div>
+        <div class="f-row"><div class="f-label">Phone</div><input type="text" id="t-phone" placeholder="+62…"/></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-tech')">Cancel</button>
+      <button class="btn btn-y" onclick="saveTech()">Add Technician</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// AUTH SYSTEM
+// ═══════════════════════════════════════════════
+const AUTH_KEY = 'ksc_auth';
+const USERS_KEY = 'ksc_users';
+
+// Default users — stored in localStorage so admin can change passwords
+function getUsers() {
+  try {
+    const stored = localStorage.getItem(USERS_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch(e) {}
+  // Default credentials
+  return [
+    { username: 'admin',   password: 'karcher2025', role: 'Service Manager',  name: 'Admin' },
+    { username: 'teknisi1', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 1' },
+    { username: 'teknisi2', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 2' },
+  ];
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+let currentUser = null;
+let loginAttempts = 0;
+let lockoutUntil = 0;
+let lockoutInterval = null;
+
+function isLoggedIn() {
+  try {
+    const s = sessionStorage.getItem(AUTH_KEY);
+    if (!s) return false;
+    const data = JSON.parse(s);
+    // Session valid for 8 hours
+    if (Date.now() - data.loginAt > 8 * 3600 * 1000) {
+      sessionStorage.removeItem(AUTH_KEY);
+      return false;
+    }
+    currentUser = data;
+    return true;
+  } catch(e) { return false; }
+}
+
+function doLogin() {
+  const now = Date.now();
+  if (lockoutUntil > now) return;
+
+  const username = (document.getElementById('login-user').value || '').trim().toLowerCase();
+  const password = (document.getElementById('login-pass').value || '').trim();
+  const errorEl = document.getElementById('login-error');
+  const lockedEl = document.getElementById('login-locked');
+
+  if (!username || !password) {
+    showLoginError('Masukkan username dan password.');
+    return;
+  }
+
+  const users = getUsers();
+  const user = users.find(u => u.username.toLowerCase() === username && u.password === password);
+
+  if (user) {
+    // Success
+    loginAttempts = 0;
+    currentUser = { username: user.username, name: user.name, role: user.role, loginAt: Date.now() };
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
+
+    // Update sidebar info
+    const av = document.getElementById('sb-avatar-letter');
+    const nm = document.getElementById('sb-uname-text');
+    const rl = document.getElementById('sb-role-text');
+    if (av) av.textContent = user.name.charAt(0).toUpperCase();
+    if (nm) nm.textContent = user.name;
+    if (rl) rl.textContent = user.role;
+
+    // Clear fields
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
+    errorEl.classList.remove('show');
+    errorEl.textContent = '';
+
+    // Go to admin panel
+    document.getElementById('pg-login').classList.remove('active');
+    document.getElementById('pg-admin').classList.add('active');
+    renderView('dashboard');
+    goView('dashboard', document.querySelector('.nav-item'));
+  } else {
+    loginAttempts++;
+    if (loginAttempts >= 5) {
+      lockoutUntil = Date.now() + 30000;
+      loginAttempts = 0;
+      document.getElementById('login-form-area').style.display = 'none';
+      lockedEl.classList.add('show');
+      let secs = 30;
+      document.getElementById('lockout-timer').textContent = secs;
+      lockoutInterval = setInterval(() => {
+        secs--;
+        const timerEl = document.getElementById('lockout-timer');
+        if (timerEl) timerEl.textContent = secs;
+        if (secs <= 0) {
+          clearInterval(lockoutInterval);
+          lockoutUntil = 0;
+          lockedEl.classList.remove('show');
+          document.getElementById('login-form-area').style.display = 'block';
+        }
+      }, 1000);
+    } else {
+      showLoginError('Username atau password salah. (' + (5 - loginAttempts) + ' percobaan tersisa)');
+    }
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  if (el) { el.textContent = msg; el.classList.add('show'); }
+}
+
+function doLogout() {
+  if (!confirm('Logout dari staff portal?')) return;
+  sessionStorage.removeItem(AUTH_KEY);
+  currentUser = null;
+  document.getElementById('pg-admin').classList.remove('active');
+  document.getElementById('pg-login').classList.remove('active');
+  document.getElementById('pg-customer').classList.add('active');
+  toast('Logged out', 'info');
+}
+
+function goLogin() {
+  // From customer portal → show login page
+  document.getElementById('pg-customer').classList.remove('active');
+  document.getElementById('pg-login').classList.add('active');
+  setTimeout(() => {
+    const u = document.getElementById('login-user');
+    if (u) u.focus();
+  }, 100);
+}
+
+
+// ═══════════════════════════════════════════════
+// DATA STORE
+// ═══════════════════════════════════════════════
+const STORE_KEY = 'ksc_data';
+
+function loadData() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || defaultData(); }
+  catch { return defaultData(); }
+}
+function saveData(d) { localStorage.setItem(STORE_KEY, JSON.stringify(d)); }
+
+function defaultData() {
+  const now = Date.now();
+  const d1 = now - 86400000*3, d2 = now - 86400000*2, d3 = now - 86400000, d4 = now - 3600000*5;
+  return {
+    tickets: [
+      { id:'SVC-2025-0001', customer:'PT. Maju Jaya', phone:'0812-3456-7890', machine:'Kärcher K5 Premium', serial:'K5-2023-88123', mactype:'Pressure Washer', problem:'High-pressure pump not building pressure. Trigger gun leaking.', tech:'Ahmad Rizki', priority:'high', status:'done', notes:'Check O-rings and pump seals', createdAt: d1, updatedAt: now, history:[{ts:d1,action:'Ticket Created',note:'Machine received at front desk',tech:'Admin'},{ts:d1+3600000,action:'Diagnosing',note:'Found worn pump seals and cracked O-ring on trigger',tech:'Ahmad Rizki'},{ts:d2,action:'Repairing',note:'Ordered replacement seals. Started disassembly.',tech:'Ahmad Rizki'},{ts:d3,action:'Testing / QC',note:'Seal replaced. Testing at 150 bar — holding steady.',tech:'Ahmad Rizki'},{ts:now,action:'Done — Ready for Pickup',note:'Machine fully repaired. All functions tested. Ready!',tech:'Ahmad Rizki'}] },
+      { id:'SVC-2025-0002', customer:'Budi Santoso', phone:'0813-9876-5432', machine:'Kärcher WD 5', serial:'WD5-2022-41209', mactype:'Wet/Dry Vacuum', problem:'Motor making grinding noise and suction power reduced.', tech:'Doni Prasetyo', priority:'normal', status:'repairing', notes:'', createdAt: d2, updatedAt: d4, history:[{ts:d2,action:'Ticket Created',note:'Machine dropped off by customer',tech:'Admin'},{ts:d2+7200000,action:'Diagnosing',note:'Motor bearing worn. Filter also clogged.',tech:'Doni Prasetyo'},{ts:d4,action:'Repairing',note:'Bearing replaced. New filter installed.',tech:'Doni Prasetyo'}] },
+      { id:'SVC-2025-0003', customer:'CV. Berkah Abadi', phone:'0821-5544-3322', machine:'Kärcher HD 7/18 CX', serial:'HD7-2021-30091', mactype:'Pressure Washer', problem:'Machine not starting. Check engine indicator on.', tech:'Siti Rahayu', priority:'urgent', status:'diagnosing', notes:'Urgent — customer needs machine by Friday', createdAt: d3, updatedAt: now-1800000, history:[{ts:d3,action:'Ticket Created',note:'Urgent request',tech:'Admin'},{ts:now-1800000,action:'Diagnosing',note:'Running diagnostics — electrical fault suspected.',tech:'Siti Rahayu'}] },
+      { id:'SVC-2025-0004', customer:'Hotel Grand Nusantara', phone:'0811-2233-4455', machine:'Kärcher T 300', serial:'T300-2020-19882', mactype:'Sweeper', problem:'Brush roll not spinning. Left side belt broken.', tech:'Ahmad Rizki', priority:'normal', status:'received', notes:'', createdAt: now-3600000, updatedAt: now-3600000, history:[{ts:now-3600000,action:'Ticket Created',note:'Machine received from hotel maintenance team',tech:'Admin'}] },
+      { id:'SVC-2025-0005', customer:'Dewi Lestari', phone:'0878-1122-3344', machine:'Kärcher SC 3', serial:'SC3-2023-55601', mactype:'Steam Cleaner', problem:'No steam output. Heating element suspected failure.', tech:'Doni Prasetyo', priority:'normal', status:'delivered', notes:'', createdAt: now-86400000*7, updatedAt: now-86400000*4, history:[{ts:now-86400000*7,action:'Ticket Created',note:'',tech:'Admin'},{ts:now-86400000*6,action:'Diagnosing',note:'Heating element confirmed faulty.',tech:'Doni Prasetyo'},{ts:now-86400000*5,action:'Repairing',note:'New element fitted.',tech:'Doni Prasetyo'},{ts:now-86400000*4,action:'Done — Ready for Pickup',note:'Steam output perfect.',tech:'Doni Prasetyo'},{ts:now-86400000*4+7200000,action:'Delivered',note:'Customer collected.',tech:'Admin'}] },
+    ],
+    visits: [
+      { id:'VST-2025-001', customer:'PT. Karya Agung', phone:'0812-8899-0011', address:'Jl. Industri Raya No.45, Cibitung', machine:'Kärcher BR 45/22, Floor Scrubber', desc:'Preventive maintenance + brush replacement', date: new Date(now+86400000).toISOString().slice(0,10), time:'09:00', tech:'Ahmad Rizki', type:'maintenance', notes:'Bring 2x brush set', status:'scheduled', createdAt: now },
+      { id:'VST-2025-002', customer:'Mall Citraland', phone:'0811-9988-7766', address:'Jl. Citraland Blvd, Lantai B2', machine:'Kärcher KM 90/60 R', desc:'Broken gearbox on ride-on sweeper', date: new Date(now+172800000).toISOString().slice(0,10), time:'08:00', tech:'Doni Prasetyo', type:'repair', notes:'Access via service elevator', status:'scheduled', createdAt: now-3600000 },
+      { id:'VST-2025-003', customer:'RS Siloam', phone:'0812-3344-5566', address:'Jl. Siloam No.6, Tangerang', machine:'Multiple HD units', desc:'Annual maintenance inspection for 4 pressure washers', date: new Date(now-86400000).toISOString().slice(0,10), time:'10:00', tech:'Siti Rahayu', type:'inspection', notes:'', status:'completed', createdAt: now-86400000*3 },
+    ],
+    technicians: [
+      { id:'t1', name:'Ahmad Rizki', spec:'Pressure Washer', phone:'0812-1111-2222', color:'#FFD700' },
+      { id:'t2', name:'Doni Prasetyo', spec:'All Types', phone:'0813-3333-4444', color:'#3ecf8e' },
+      { id:'t3', name:'Siti Rahayu', spec:'Industrial', phone:'0814-5555-6666', color:'#5ab4ff' },
+    ]
+  };
+}
+
+let DB = loadData();
+
+// ═══════════════════════════════════════════════
+// PAGE ROUTING
+// ═══════════════════════════════════════════════
+function goAdmin() {
+  // Always check authentication before showing admin
+  if (!isLoggedIn()) {
+    goLogin();
+    return;
+  }
+  // Update sidebar with current user info
+  const av = document.getElementById('sb-avatar-letter');
+  const nm = document.getElementById('sb-uname-text');
+  const rl = document.getElementById('sb-role-text');
+  if (av && currentUser) av.textContent = (currentUser.name || 'A').charAt(0).toUpperCase();
+  if (nm && currentUser) nm.textContent = currentUser.name || 'Admin';
+  if (rl && currentUser) rl.textContent = currentUser.role || 'Staff';
+  document.getElementById('pg-customer').classList.remove('active');
+  document.getElementById('pg-admin').classList.add('active');
+  renderView('dashboard');
+}
+function goCustomer() {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('pg-customer').classList.add('active');
+}
+function goView(view, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
+  if (el) el.classList.add('on');
+  renderView(view);
+}
+
+// ═══════════════════════════════════════════════
+// CUSTOMER PORTAL
+// ═══════════════════════════════════════════════
+function trackTicket() {
+  const q = document.getElementById('cust-search').value.trim().toUpperCase();
+  const res = document.getElementById('cust-result');
+  if (!q) { toast('Enter a ticket number', 'err'); return; }
+  const t = DB.tickets.find(x => x.id === q);
+  if (!t) {
+    res.innerHTML = `<div class="no-result"><div class="icon">🔍</div><h3>Ticket Not Found</h3><p>No service record found for <strong>${esc(q)}</strong>.<br>Please check the ticket number and try again.</p></div>`;
+    return;
+  }
+  const steps = ['received','diagnosing','repairing','testing','done','delivered'];
+  const stepLabels = ['Received','Diagnosing','Repairing','Testing','Ready','Delivered'];
+  const curIdx = steps.indexOf(t.status);
+  const stepsHtml = steps.map((s,i) => {
+    const cls = i < curIdx ? 'done' : i === curIdx ? 'active' : '';
+    const dot = i < curIdx ? '✓' : i+1;
+    return `<div class="ps ${cls}">
+      <div class="ps-line"></div>
+      <div class="ps-dot">${dot}</div>
+      <div class="ps-label">${stepLabels[i]}</div>
+    </div>`;
+  }).join('');
+
+  const histHtml = [...t.history].reverse().map((h,i) => `
+    <div class="tl-item">
+      <div class="tl-dot-col"><div class="tl-dot" style="${i===0?'background:var(--green)':''}"></div><div class="tl-vline"></div></div>
+      <div class="tl-text">
+        <div class="tl-action">${esc(h.action)}</div>
+        <div class="tl-time">${fmtDate(h.ts)}</div>
+        ${h.note ? `<div class="tl-note">${esc(h.note)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  res.innerHTML = `<div class="ticket-result">
+    <div class="tc-header">
+      <div>
+        <div class="tc-id">${esc(t.id)}</div>
+        <div class="tc-machine">${esc(t.machine)}</div>
+        <div class="tc-customer">👤 ${esc(t.customer)} &nbsp;·&nbsp; ${esc(t.mactype)}</div>
+      </div>
+      <div class="tc-status-badge"><span class="status-badge s-${t.status}">${statusLabel(t.status)}</span></div>
+    </div>
+    <div class="tc-progress"><div class="progress-steps">${stepsHtml}</div></div>
+    <div class="tc-details">
+      <div class="tc-grid">
+        <div class="tc-field"><label>Problem Reported</label><span>${esc(t.problem)}</span></div>
+        <div class="tc-field"><label>Assigned Technician</label><span>${t.tech ? esc(t.tech) : 'Not yet assigned'}</span></div>
+        <div class="tc-field"><label>Date Received</label><span>${fmtDate(t.createdAt)}</span></div>
+        <div class="tc-field"><label>Last Updated</label><span>${fmtDate(t.updatedAt)}</span></div>
+      </div>
+      ${t.status === 'done' ? '<div style="background:var(--green-d);color:var(--green);border:1px solid rgba(62,207,142,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">✅ Your machine is ready for pickup! Please bring this ticket number when collecting.</div>' : ''}
+      <div class="timeline"><div class="tl-title">Service History</div>${histHtml}</div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// VIEWS
+// ═══════════════════════════════════════════════
+function renderView(view) {
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', productivity:'Productivity', technicians:'Technicians', settings:'Settings' };
+  document.getElementById('view-title').textContent = titles[view] || view;
+  const c = document.getElementById('main-content');
+  c.innerHTML = '';
+  if (view==='dashboard') c.innerHTML = viewDashboard();
+  else if (view==='tickets') c.innerHTML = viewTickets();
+  else if (view==='new-ticket') { openNewTicket(); renderView('tickets'); return; }
+  else if (view==='site-visits') c.innerHTML = viewSiteVisits();
+  else if (view==='new-visit') { openNewVisit(); renderView('site-visits'); return; }
+  else if (view==='productivity') c.innerHTML = viewProductivity();
+  else if (view==='technicians') c.innerHTML = viewTechnicians();
+  else if (view==='settings') c.innerHTML = viewSettings();
+}
+
+// ─── DASHBOARD ───
+function viewDashboard() {
+  const t = DB.tickets;
+  const open = t.filter(x => !['done','delivered'].includes(x.status)).length;
+  const done = t.filter(x => x.status==='done').length;
+  const total = t.length;
+  const urgent = t.filter(x => x.priority==='urgent' && !['done','delivered'].includes(x.status)).length;
+  const visits = DB.visits.filter(x => x.status==='scheduled').length;
+
+  const recentTickets = [...t].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,5);
+
+  const techStats = DB.technicians.map(tech => {
+    const assigned = t.filter(x => x.tech === tech.name && !['done','delivered'].includes(x.status));
+    const completed = t.filter(x => x.tech === tech.name && ['done','delivered'].includes(x.status));
+    return { ...tech, active: assigned.length, completed: completed.length };
+  });
+
+  // weekly bars (last 7 days)
+  const days = Array.from({length:7},(_,i)=>{
+    const d = new Date(Date.now()-86400000*(6-i));
+    const label = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+    const count = t.filter(x => {
+      const cd = new Date(x.createdAt); return cd.toDateString()===d.toDateString();
+    }).length;
+    return {label,count};
+  });
+  const maxD = Math.max(...days.map(d=>d.count),1);
+
+  return `
+  <div class="kpi-row">
+    <div class="kpi yellow"><div class="kpi-label">Open Tickets</div><div class="kpi-val" style="color:var(--y)">${open}</div><div class="kpi-sub">Active service jobs</div><div class="kpi-icon">🔧</div></div>
+    <div class="kpi green"><div class="kpi-label">Ready for Pickup</div><div class="kpi-val" style="color:var(--green)">${done}</div><div class="kpi-sub">Awaiting collection</div><div class="kpi-icon">✅</div></div>
+    <div class="kpi blue"><div class="kpi-label">Upcoming Visits</div><div class="kpi-val" style="color:var(--blue)">${visits}</div><div class="kpi-sub">Scheduled site visits</div><div class="kpi-icon">🚐</div></div>
+    <div class="kpi red"><div class="kpi-label">Urgent</div><div class="kpi-val" style="color:var(--red)">${urgent}</div><div class="kpi-sub">Need immediate attention</div><div class="kpi-icon">⚡</div></div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-hd"><h3>Recent Tickets</h3><div class="sep"></div><span class="badge" style="background:var(--yd);color:var(--y)">${total} total</span></div>
+      <table class="tbl">
+        <thead><tr><th>Ticket</th><th>Customer</th><th>Machine</th><th>Technician</th><th>Status</th></tr></thead>
+        <tbody>${recentTickets.map(t=>`<tr style="cursor:pointer" onclick="openStatusModal('${t.id}')">
+          <td><span class="mono">${esc(t.id)}</span></td>
+          <td><span class="bold">${esc(t.customer)}</span></td>
+          <td><span class="muted">${esc(t.machine.replace('Kärcher ',''))}</span></td>
+          <td>${t.tech?`<span class="tech-chip"><span class="dot" style="background:${techColor(t.tech)}"></span>${esc(t.tech.split(' ')[0])}</span>`:'<span class="muted">—</span>'}</td>
+          <td><span class="status-badge s-${t.status}">${statusLabel(t.status)}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card">
+        <div class="card-hd"><h3>Tickets This Week</h3></div>
+        <div class="card-body">
+          <div class="mini-chart">
+            ${days.map(d=>`<div class="mc-bar" style="height:${Math.max(8,(d.count/maxD)*52)}px" data-val="${d.count} job${d.count!==1?'s':''}"></div>`).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-around;margin-top:4px">
+            ${days.map(d=>`<span style="font-size:9px;color:var(--t3);flex:1;text-align:center">${d.label}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><h3>Team Workload</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+          ${techStats.map(t=>`<div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+              <span style="font-weight:600">${esc(t.name)}</span>
+              <span style="color:var(--t3)">${t.active} active · ${t.completed} done</span>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,((t.active+t.completed)/(DB.tickets.length||1))*100*2)}%;background:${t.color}"></div></div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── TICKETS ───
+let ticketFilter = 'all';
+function viewTickets(filter) {
+  if (filter) ticketFilter = filter;
+  const filters = [{k:'all',l:'All'},{k:'received',l:'Received'},{k:'diagnosing',l:'Diagnosing'},{k:'repairing',l:'Repairing'},{k:'testing',l:'Testing'},{k:'done',l:'Ready'},{k:'delivered',l:'Delivered'}];
+  let tickets = [...DB.tickets].sort((a,b)=>b.updatedAt-a.updatedAt);
+  if (ticketFilter !== 'all') tickets = tickets.filter(t => t.status === ticketFilter);
+  return `
+  <div class="filter-row">
+    ${filters.map(f=>`<div class="filter-chip ${ticketFilter===f.k?'on':''}" onclick="ticketFilter='${f.k}';renderView('tickets')">${f.l} ${f.k==='all'?'('+DB.tickets.length+')':''}</div>`).join('')}
+    <div class="sep"></div>
+    <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
+  </div>
+  <div class="card">
+    <table class="tbl">
+      <thead><tr><th>Ticket ID</th><th>Customer</th><th>Machine</th><th>Priority</th><th>Technician</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+      <tbody>${tickets.length ? tickets.map(t=>`<tr>
+        <td><span class="mono">${esc(t.id)}</span></td>
+        <td><div class="bold">${esc(t.customer)}</div><div class="muted">${esc(t.phone)}</div></td>
+        <td><div class="bold">${esc(t.machine)}</div><div class="muted">${esc(t.mactype)}</div></td>
+        <td>${prioBadge(t.priority)}</td>
+        <td>${t.tech?`<span class="tech-chip"><span class="dot" style="background:${techColor(t.tech)}"></span>${esc(t.tech)}</span>`:'<span class="muted">Unassigned</span>'}</td>
+        <td><span class="status-badge s-${t.status}">${statusLabel(t.status)}</span></td>
+        <td><span class="muted">${relTime(t.updatedAt)}</span></td>
+        <td>
+          <div class="btn-row">
+            <button class="btn btn-sm" onclick="openStatusModal('${t.id}')">Update</button>
+            <button class="btn btn-sm" onclick="openEditTicket('${t.id}')">Edit</button>
+            <button class="btn btn-sm btn-red" onclick="deleteTicket('${t.id}')">Del</button>
+          </div>
+        </td>
+      </tr>`).join('') : `<tr><td colspan="8" class="empty-row">No tickets found.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+// ─── SITE VISITS ───
+function viewSiteVisits() {
+  const upcoming = DB.visits.filter(v=>v.status==='scheduled').sort((a,b)=>a.date.localeCompare(b.date));
+  const completed = DB.visits.filter(v=>v.status==='completed');
+  const typeIcon = {repair:'🔧',maintenance:'🛠️',installation:'⚙️',inspection:'🔍',demo:'📋'};
+  const allV = [...upcoming,...completed];
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--t2)">${upcoming.length} upcoming · ${completed.length} completed</div>
+    <button class="btn btn-y btn-sm" onclick="openNewVisit()">+ Schedule Visit</button>
+  </div>
+  <div class="visit-grid">
+    ${allV.map(v=>`<div class="visit-card">
+      <div class="vc-top">
+        <div class="vc-icon">${typeIcon[v.type]||'📍'}</div>
+        <div>
+          <div class="vc-title">${esc(v.customer)}</div>
+          <div class="vc-id">${esc(v.id)}</div>
+        </div>
+        <div style="margin-left:auto"><span class="status-badge ${v.status==='completed'?'s-delivered':'s-repairing'}">${v.status}</span></div>
+      </div>
+      <div class="vc-meta">
+        <div class="vc-field"><label>Machine</label><span>${esc(v.machine)}</span></div>
+        <div class="vc-field"><label>Type</label><span>${esc(v.type)}</span></div>
+        <div class="vc-field"><label>Date & Time</label><span>${v.date} ${v.time}</span></div>
+        <div class="vc-field"><label>Technician</label><span>${v.tech||'Unassigned'}</span></div>
+        <div class="vc-field" style="grid-column:span 2"><label>Address</label><span>${esc(v.address)}</span></div>
+        <div class="vc-field" style="grid-column:span 2"><label>Job</label><span>${esc(v.desc)}</span></div>
+        ${v.notes?`<div class="vc-field" style="grid-column:span 2"><label>Notes</label><span>${esc(v.notes)}</span></div>`:''}
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        ${v.status==='scheduled'?`<button class="btn btn-sm btn-green" onclick="completeVisit('${v.id}')">✓ Mark Complete</button>`:''}
+        <button class="btn btn-sm btn-red" onclick="deleteVisit('${v.id}')">Delete</button>
+      </div>
+    </div>`).join('')}
+    ${allV.length===0?'<div class="empty-row" style="grid-column:span 2;text-align:center;color:var(--t3);padding:40px">No site visits scheduled.</div>':''}
+  </div>`;
+}
+
+// ─── PRODUCTIVITY ───
+function viewProductivity() {
+  const techs = DB.technicians;
+  const allT = DB.tickets;
+  const allV = DB.visits;
+
+  return `
+  <div class="tech-cards">
+    ${techs.map(tech => {
+      const myTickets = allT.filter(t=>t.tech===tech.name);
+      const active   = myTickets.filter(t=>!['done','delivered'].includes(t.status)).length;
+      const done     = myTickets.filter(t=>['done','delivered'].includes(t.status)).length;
+      const visits   = allV.filter(v=>v.tech===tech.name).length;
+      const total = myTickets.length + visits;
+      const pct = total ? Math.round((done/Math.max(done+active,1))*100) : 0;
+      const urgent = myTickets.filter(t=>t.priority==='urgent'&&!['done','delivered'].includes(t.status)).length;
+      return `<div class="tech-card">
+        <div class="tc-top">
+          <div class="tc-avatar" style="background:${tech.color}20;color:${tech.color}">${tech.name.charAt(0)}</div>
+          <div>
+            <div class="tc-name">${esc(tech.name)}</div>
+            <div class="tc-pos">${esc(tech.spec)} · ${esc(tech.phone)}</div>
+          </div>
+        </div>
+        <div class="tc-stats">
+          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--y)">${active}</div><div class="tc-stat-l">Active</div></div>
+          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--green)">${done}</div><div class="tc-stat-l">Done</div></div>
+          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--blue)">${visits}</div><div class="tc-stat-l">Visits</div></div>
+        </div>
+        ${urgent>0?`<div style="margin-top:10px;background:var(--red-d);color:var(--red);border-radius:var(--r);padding:6px 10px;font-size:11px;font-weight:600">⚡ ${urgent} urgent ticket${urgent>1?'s':''} pending</div>`:''}
+        <div class="bar-wrap">
+          <div class="bar-lbl"><span>Completion rate</span><span style="color:${tech.color};font-weight:700">${pct}%</span></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${tech.color}"></div></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-hd"><h3>Ticket Details by Technician</h3></div>
+      <table class="tbl">
+        <thead><tr><th>Technician</th><th>Received</th><th>Diagnosing</th><th>Repairing</th><th>Testing</th><th>Done</th><th>Delivered</th><th>Total</th></tr></thead>
+        <tbody>${techs.map(tech=>{
+          const myT = allT.filter(t=>t.tech===tech.name);
+          const cnt = s => myT.filter(t=>t.status===s).length;
+          return `<tr>
+            <td><span class="tech-chip"><span class="dot" style="background:${tech.color}"></span>${esc(tech.name)}</span></td>
+            <td>${cnt('received')||'—'}</td><td>${cnt('diagnosing')||'—'}</td>
+            <td>${cnt('repairing')||'—'}</td><td>${cnt('testing')||'—'}</td>
+            <td style="color:var(--green);font-weight:600">${cnt('done')||'—'}</td>
+            <td style="color:var(--t3)">${cnt('delivered')||'—'}</td>
+            <td style="font-weight:700">${myT.length}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><h3>Site Visits Summary</h3></div>
+      <table class="tbl">
+        <thead><tr><th>Technician</th><th>Scheduled</th><th>Completed</th></tr></thead>
+        <tbody>${techs.map(tech=>{
+          const myV = allV.filter(v=>v.tech===tech.name);
+          return `<tr>
+            <td><span class="tech-chip"><span class="dot" style="background:${tech.color}"></span>${esc(tech.name)}</span></td>
+            <td style="color:var(--orange)">${myV.filter(v=>v.status==='scheduled').length||'—'}</td>
+            <td style="color:var(--green)">${myV.filter(v=>v.status==='completed').length||'—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ─── TECHNICIANS ───
+function viewTechnicians() {
+  return `
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button class="btn btn-y btn-sm" onclick="openAddTech()">+ Add Technician</button>
+  </div>
+  <div class="card">
+    <table class="tbl">
+      <thead><tr><th>Name</th><th>Specialization</th><th>Phone</th><th>Active Jobs</th><th>Completed</th><th>Actions</th></tr></thead>
+      <tbody>${DB.technicians.map(t=>{
+        const active = DB.tickets.filter(x=>x.tech===t.name&&!['done','delivered'].includes(x.status)).length;
+        const done   = DB.tickets.filter(x=>x.tech===t.name&&['done','delivered'].includes(x.status)).length;
+        return `<tr>
+          <td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:${t.color}22;color:${t.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${t.name.charAt(0)}</div><div class="bold">${esc(t.name)}</div></div></td>
+          <td class="muted">${esc(t.spec)}</td>
+          <td class="muted">${esc(t.phone)}</td>
+          <td style="color:var(--y);font-weight:600">${active}</td>
+          <td style="color:var(--green);font-weight:600">${done}</td>
+          <td><button class="btn btn-sm btn-red" onclick="deleteTech('${t.id}')">Remove</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// TICKET CRUD
+// ═══════════════════════════════════════════════
+let editingTicketId = null;
+
+function openNewTicket() {
+  editingTicketId = null;
+  document.getElementById('modal-ticket-title').textContent = 'New Service Ticket';
+  document.getElementById('save-ticket-btn').textContent = 'Create Ticket';
+  ['f-customer','f-phone','f-machine','f-serial','f-notes'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-mactype').value='Pressure Washer';
+  document.getElementById('f-priority').value='normal';
+  populateTechSelect('f-tech');
+  openModal('modal-ticket');
+}
+
+function openEditTicket(id) {
+  const t = DB.tickets.find(x=>x.id===id);
+  if (!t) return;
+  editingTicketId = id;
+  document.getElementById('modal-ticket-title').textContent = 'Edit Ticket — ' + t.id;
+  document.getElementById('save-ticket-btn').textContent = 'Save Changes';
+  document.getElementById('f-customer').value = t.customer;
+  document.getElementById('f-phone').value = t.phone;
+  document.getElementById('f-machine').value = t.machine;
+  document.getElementById('f-serial').value = t.serial;
+  document.getElementById('f-mactype').value = t.mactype;
+  document.getElementById('f-problem').value = t.problem;
+  document.getElementById('f-priority').value = t.priority;
+  document.getElementById('f-notes').value = t.notes;
+  populateTechSelect('f-tech', t.tech);
+  openModal('modal-ticket');
+}
+
+function saveTicket() {
+  const customer = document.getElementById('f-customer').value.trim();
+  const machine  = document.getElementById('f-machine').value.trim();
+  const problem  = document.getElementById('f-problem').value.trim();
+  if (!customer || !machine || !problem) { toast('Fill required fields', 'err'); return; }
+
+  if (editingTicketId) {
+    const t = DB.tickets.find(x=>x.id===editingTicketId);
+    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), updatedAt:Date.now() });
+    toast('Ticket updated', 'ok');
+  } else {
+    const id = newTicketId();
+    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center',tech:'Admin'}] });
+    toast('Ticket created: ' + id, 'ok');
+  }
+  saveData(DB);
+  closeModal('modal-ticket');
+  renderView('tickets');
+}
+
+function deleteTicket(id) {
+  if (!confirm('Delete ticket ' + id + '?')) return;
+  DB.tickets = DB.tickets.filter(t=>t.id!==id);
+  saveData(DB); renderView('tickets'); toast('Ticket deleted');
+}
+
+// ─── STATUS UPDATE ───
+function openStatusModal(id) {
+  const t = DB.tickets.find(x=>x.id===id);
+  if (!t) return;
+  document.getElementById('status-ticket-id').textContent = t.id + ' — ' + t.machine;
+  document.getElementById('f-status').value = t.status;
+  document.getElementById('f-status-note').value = '';
+  populateTechSelect('f-status-tech', t.tech, true);
+  document.getElementById('modal-status').dataset.ticketId = id;
+  openModal('modal-status');
+}
+
+function saveStatus() {
+  const id = document.getElementById('modal-status').dataset.ticketId;
+  const t = DB.tickets.find(x=>x.id===id);
+  if (!t) return;
+  const newStatus = document.getElementById('f-status').value;
+  const note = document.getElementById('f-status-note').value.trim();
+  const newTech = document.getElementById('f-status-tech').value;
+  t.status = newStatus;
+  t.updatedAt = Date.now();
+  if (newTech) t.tech = newTech;
+  t.history.push({ ts:Date.now(), action:statusLabel(newStatus), note, tech: t.tech||'Admin' });
+  saveData(DB);
+  closeModal('modal-status');
+  renderView('tickets');
+  toast('Status updated to: ' + statusLabel(newStatus), 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// VISITS CRUD
+// ═══════════════════════════════════════════════
+function openNewVisit() {
+  ['v-customer','v-phone','v-address','v-machine','v-desc','v-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('v-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('v-time').value = '09:00';
+  populateTechSelect('v-tech');
+  openModal('modal-visit');
+}
+
+function saveVisit() {
+  const customer = document.getElementById('v-customer').value.trim();
+  const address  = document.getElementById('v-address').value.trim();
+  const desc     = document.getElementById('v-desc').value.trim();
+  if (!customer || !address || !desc) { toast('Fill required fields', 'err'); return; }
+  const id = 'VST-' + new Date().getFullYear() + '-' + String(DB.visits.length+1).padStart(3,'0');
+  DB.visits.push({ id, customer, phone:document.getElementById('v-phone').value.trim(), address, machine:document.getElementById('v-machine').value.trim(), desc, date:document.getElementById('v-date').value, time:document.getElementById('v-time').value, tech:document.getElementById('v-tech').value, type:document.getElementById('v-type').value, notes:document.getElementById('v-notes').value.trim(), status:'scheduled', createdAt:Date.now() });
+  saveData(DB); closeModal('modal-visit'); renderView('site-visits'); toast('Visit scheduled: '+id,'ok');
+}
+
+function completeVisit(id) {
+  const v = DB.visits.find(x=>x.id===id);
+  if (!v) return;
+  v.status='completed'; saveData(DB); renderView('site-visits'); toast('Visit marked complete','ok');
+}
+
+function deleteVisit(id) {
+  if (!confirm('Delete visit '+id+'?')) return;
+  DB.visits=DB.visits.filter(v=>v.id!==id); saveData(DB); renderView('site-visits'); toast('Visit deleted');
+}
+
+// ═══════════════════════════════════════════════
+// TECHNICIANS CRUD
+// ═══════════════════════════════════════════════
+function openAddTech() { document.getElementById('t-name').value=''; document.getElementById('t-phone').value=''; openModal('modal-tech'); }
+function saveTech() {
+  const name=document.getElementById('t-name').value.trim();
+  if (!name){toast('Enter name','err');return;}
+  const colors=['#FFD700','#3ecf8e','#5ab4ff','#ff9f40','#a78bfa','#ff5a5a'];
+  DB.technicians.push({id:'t'+Date.now(),name,spec:document.getElementById('t-spec').value,phone:document.getElementById('t-phone').value.trim(),color:colors[DB.technicians.length%colors.length]});
+  saveData(DB);closeModal('modal-tech');renderView('technicians');toast('Technician added','ok');
+}
+function deleteTech(id){
+  if(!confirm('Remove this technician?'))return;
+  DB.technicians=DB.technicians.filter(t=>t.id!==id);saveData(DB);renderView('technicians');toast('Technician removed');
+}
+
+
+// ─── SETTINGS ───
+function viewSettings() {
+  const users = getUsers();
+  const loggedUser = currentUser ? users.find(u => u.username === currentUser.username) : null;
+
+  return `
+  <div style="max-width:600px">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-hd"><h3>🔐 Ganti Password Anda</h3></div>
+      <div class="card-body" style="padding:16px">
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Password Lama</div>
+          <input type="password" id="pw-old" placeholder="Password saat ini" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Password Baru</div>
+          <input type="password" id="pw-new" placeholder="Password baru (min 6 karakter)" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Konfirmasi Password Baru</div>
+          <input type="password" id="pw-confirm" placeholder="Ulangi password baru" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
+        </div>
+        <button class="btn btn-y btn-sm" onclick="changePassword()">💾 Simpan Password</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-hd"><h3>👥 Kelola Akun Staff</h3><div class="sep"></div><button class="btn btn-y btn-sm" onclick="openAddUser()">+ Tambah User</button></div>
+      <table class="tbl">
+        <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Aksi</th></tr></thead>
+        <tbody>
+          ${users.map(u => `<tr>
+            <td><span class="mono">${esc(u.username)}</span></td>
+            <td class="bold">${esc(u.name)}</td>
+            <td><span class="muted">${esc(u.role)}</span></td>
+            <td>
+              <div class="btn-row">
+                <button class="btn btn-sm" onclick="openResetPw('${esc(u.username)}')">Reset PW</button>
+                ${u.username !== (currentUser && currentUser.username) ? `<button class="btn btn-sm btn-red" onclick="deleteUser('${esc(u.username)}')">Hapus</button>` : '<span class="muted" style="font-size:11px">(Anda)</span>'}
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><h3>ℹ️ Info Sesi</h3></div>
+      <div class="card-body" style="padding:16px;font-size:13px;color:var(--t2);line-height:2">
+        <div>👤 Login sebagai: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.name) : '—'}</strong></div>
+        <div>🔑 Username: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.username) : '—'}</strong></div>
+        <div>📋 Role: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.role) : '—'}</strong></div>
+        <div>🕐 Login pada: <strong style="color:var(--t1)">${currentUser ? fmtDate(currentUser.loginAt) : '—'}</strong></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-sm" style="color:var(--red);border-color:rgba(255,90,90,.3);background:var(--red-d)" onclick="doLogout()">🚪 Logout Sekarang</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function changePassword() {
+  const oldPw = (document.getElementById('pw-old') && document.getElementById('pw-old').value) || '';
+  const newPw = (document.getElementById('pw-new') && document.getElementById('pw-new').value) || '';
+  const confirm = (document.getElementById('pw-confirm') && document.getElementById('pw-confirm').value) || '';
+  if (!oldPw || !newPw || !confirm) { toast('Isi semua field password', 'err'); return; }
+  if (newPw.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
+  if (newPw !== confirm) { toast('Konfirmasi password tidak cocok', 'err'); return; }
+  const users = getUsers();
+  const u = users.find(x => x.username === currentUser.username);
+  if (!u) { toast('User tidak ditemukan', 'err'); return; }
+  if (u.password !== oldPw) { toast('Password lama salah', 'err'); return; }
+  u.password = newPw;
+  saveUsers(users);
+  if (document.getElementById('pw-old')) document.getElementById('pw-old').value = '';
+  if (document.getElementById('pw-new')) document.getElementById('pw-new').value = '';
+  if (document.getElementById('pw-confirm')) document.getElementById('pw-confirm').value = '';
+  toast('Password berhasil diubah', 'ok');
+}
+
+function openAddUser() {
+  const name = prompt('Nama lengkap:');
+  if (!name || !name.trim()) return;
+  const username = prompt('Username (tanpa spasi):');
+  if (!username || !username.trim()) return;
+  if (/\s/.test(username)) { toast('Username tidak boleh mengandung spasi', 'err'); return; }
+  const users = getUsers();
+  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) { toast('Username sudah digunakan', 'err'); return; }
+  const role = prompt('Role (e.g. Technician, Service Manager):', 'Technician');
+  const password = prompt('Password awal (min 6 karakter):');
+  if (!password || password.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
+  users.push({ username: username.trim(), password, role: (role||'Technician').trim(), name: name.trim() });
+  saveUsers(users);
+  renderView('settings');
+  toast('User ' + username + ' ditambahkan', 'ok');
+}
+
+function openResetPw(username) {
+  const newPw = prompt('Password baru untuk ' + username + ' (min 6 karakter):');
+  if (!newPw || newPw.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
+  const users = getUsers();
+  const u = users.find(x => x.username === username);
+  if (!u) { toast('User tidak ditemukan', 'err'); return; }
+  u.password = newPw;
+  saveUsers(users);
+  toast('Password ' + username + ' direset', 'ok');
+}
+
+function deleteUser(username) {
+  if (!confirm('Hapus user ' + username + '?')) return;
+  const users = getUsers();
+  const filtered = users.filter(u => u.username !== username);
+  if (filtered.length === 0) { toast('Tidak bisa menghapus semua user', 'err'); return; }
+  saveUsers(filtered);
+  renderView('settings');
+  toast('User ' + username + ' dihapus', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════
+function globalSearch(q) {
+  if (!q.trim()) return;
+  const r = DB.tickets.filter(t=>t.id.includes(q.toUpperCase())||t.customer.toLowerCase().includes(q.toLowerCase())||t.machine.toLowerCase().includes(q.toLowerCase()));
+  if (r.length>0) { DB._searchResults=r; renderView('tickets'); }
+}
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+function newTicketId() {
+  const y = new Date().getFullYear();
+  const n = String(DB.tickets.filter(t=>t.id.includes(y)).length+1).padStart(4,'0');
+  return `SVC-${y}-${n}`;
+}
+
+function populateTechSelect(selectId, current='', keepEmpty=false) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = keepEmpty ? '<option value="">— Keep current —</option>' : '<option value="">— Unassigned —</option>';
+  DB.technicians.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.name; opt.textContent = t.name;
+    if (t.name === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function statusLabel(s) {
+  const m={received:'Received',diagnosing:'Diagnosing',repairing:'Repairing',testing:'Testing',done:'Ready',delivered:'Delivered',onsite:'On-Site'};
+  return m[s]||s;
+}
+function prioBadge(p) {
+  const m={urgent:'<span style="background:var(--red-d);color:var(--red);border:1px solid rgba(255,90,90,.3);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">⚡ Urgent</span>',high:'<span style="background:var(--orange-d);color:var(--orange);border:1px solid rgba(255,159,64,.3);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">High</span>',normal:'<span style="color:var(--t3);font-size:12px">Normal</span>'};
+  return m[p]||p;
+}
+function techColor(name) {
+  const t=DB.technicians.find(x=>x.name===name);
+  return t?t.color:'#8892aa';
+}
+function fmtDate(ts) {
+  if(!ts)return'—';
+  const d=new Date(ts);
+  return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+}
+function relTime(ts) {
+  const diff=(Date.now()-ts)/1000;
+  if(diff<60)return'just now';
+  if(diff<3600)return Math.floor(diff/60)+'m ago';
+  if(diff<86400)return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// modals
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+// close on bg click
+document.querySelectorAll('.modal-bg').forEach(bg=>{bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});});
+
+function toast(msg,type=''){
+  const el=document.createElement('div');
+  el.className='toast '+(type==='ok'?'ok':type==='err'?'err':'info');
+  el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// ─── HIDDEN STAFF ACCESS ───
+// Customer tidak melihat tombol login. Staff hanya bisa akses via:
+//   URL hash: ...html#staff   atau   ...html#login   atau   ...html#admin
+
+// ─── INIT ───
+window.addEventListener('DOMContentLoaded', () => {
+  // Set today's date for visit form
+  const todayInput = document.getElementById('v-date');
+  if (todayInput) todayInput.value = new Date().toISOString().slice(0,10);
+
+  // Update sidebar info kalau session masih valid
+  if (isLoggedIn() && currentUser) {
+    const av = document.getElementById('sb-avatar-letter');
+    const nm = document.getElementById('sb-uname-text');
+    const rl = document.getElementById('sb-role-text');
+    if (av) av.textContent = (currentUser.name || 'A').charAt(0).toUpperCase();
+    if (nm) nm.textContent = currentUser.name || 'Admin';
+    if (rl) rl.textContent = currentUser.role || 'Staff';
+  }
+
+  // Default landing: customer portal
+  const allPages = document.querySelectorAll('.page');
+  allPages.forEach(p => p.classList.remove('active'));
+  document.getElementById('pg-customer').classList.add('active');
+
+  // Hidden staff access via URL hash
+  const hash = (location.hash || '').toLowerCase();
+  if (hash === '#staff' || hash === '#login' || hash === '#admin') {
+    if (isLoggedIn()) {
+      goAdmin();
+    } else {
+      goLogin();
+    }
+    // Bersihkan hash dari URL biar nggak ke-share tidak sengaja
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+});
+</script>
+</body>
+</html>
