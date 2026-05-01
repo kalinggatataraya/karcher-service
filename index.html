@@ -613,6 +613,7 @@ textarea { resize: vertical; min-height: 80px; }
           <div class="sb-role" id="sb-role-text">Service Manager</div>
         </div>
       </div>
+      <div id="sync-status" style="font-size:11px;color:var(--t3);padding:6px 10px;text-align:center;border-top:1px solid var(--b1);margin-top:4px">⚪ <span style="color:var(--t3);font-size:11px">Offline (local)</span></div>
       <button class="nav-item" style="color:var(--red);margin-top:4px" onclick="doLogout()">
         <span class="ico">🚪</span> Logout
       </button>
@@ -628,6 +629,7 @@ textarea { resize: vertical; min-height: 80px; }
         <span class="si">🔍</span>
         <input type="text" placeholder="Search tickets…" id="global-search" oninput="globalSearch(this.value)"/>
       </div>
+      <button class="btn btn-sm" onclick="manualRefresh()" title="Refresh data dari cloud">🔄</button>
       <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
     </div>
 
@@ -927,11 +929,112 @@ function goLogin() {
 // ═══════════════════════════════════════════════
 const STORE_KEY = 'ksc_data';
 
+// ═══════════════════════════════════════════════
+// CLOUD STORAGE (JSONBin.io)
+// ═══════════════════════════════════════════════
+// SETUP STEPS:
+// 1. Daftar gratis di https://jsonbin.io/
+// 2. Klik "Create Bin" → paste isi default JSON (boleh kosong: {}) → Save
+// 3. Copy "Bin ID" (di URL setelah /b/...) dan "X-MASTER-KEY" (di Account Settings → API Keys)
+// 4. Ganti dua nilai di bawah ini → Save file → upload ulang ke GitHub Pages
+const CLOUD = {
+  BIN_ID:  '69f436c436566621a811083a',
+  API_KEY: '$2a$10$TcBgNzxmiDq03bR4EwGN5.ooNHyIP5CnSVCCaYNpY8qmkNV6KYp5S'
+};
+
+const CLOUD_API = 'https://api.jsonbin.io/v3/b';
+const cloudIsConfigured = () => CLOUD.BIN_ID && CLOUD.API_KEY 
+  && !CLOUD.BIN_ID.includes('PASTE') && !CLOUD.API_KEY.includes('PASTE');
+
+let _syncEl = null;
+function setSyncStatus(state, msg) {
+  // state: 'syncing' | 'synced' | 'error' | 'offline'
+  if (!_syncEl) _syncEl = document.getElementById('sync-status');
+  if (!_syncEl) return;
+  const map = {
+    syncing:  { dot:'🟡', txt: msg || 'Syncing...',     col:'var(--y)'    },
+    synced:   { dot:'🟢', txt: msg || 'Synced',         col:'var(--green)'},
+    error:    { dot:'🔴', txt: msg || 'Sync failed',    col:'var(--red)'  },
+    offline:  { dot:'⚪', txt: msg || 'Offline (local)', col:'var(--t3)'  }
+  };
+  const s = map[state] || map.offline;
+  _syncEl.innerHTML = `<span style="color:${s.col}">${s.dot}</span> <span style="color:var(--t3);font-size:11px">${s.txt}</span>`;
+}
+
+async function cloudLoad() {
+  if (!cloudIsConfigured()) return null;
+  try {
+    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': CLOUD.API_KEY, 'X-Bin-Meta': 'false' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // JSONBin wraps result, but with X-Bin-Meta:false it returns the raw record
+    return data;
+  } catch (e) {
+    console.error('[Cloud] Load failed:', e);
+    return null;
+  }
+}
+
+async function cloudSave(data) {
+  if (!cloudIsConfigured()) return false;
+  try {
+    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': CLOUD.API_KEY
+      },
+      body: JSON.stringify(data)
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('[Cloud] Save failed:', e);
+    return false;
+  }
+}
+
+let _saveTimer = null;
+function cloudSaveDebounced(data) {
+  if (!cloudIsConfigured()) return;
+  setSyncStatus('syncing');
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    const ok = await cloudSave(data);
+    setSyncStatus(ok ? 'synced' : 'error');
+  }, 1200);
+}
+
+// Pull latest data from cloud → update DB → re-render current view
+async function cloudRefresh(silent) {
+  if (!cloudIsConfigured()) { setSyncStatus('offline'); return false; }
+  if (!silent) setSyncStatus('syncing', 'Loading...');
+  const cloudData = await cloudLoad();
+  if (cloudData && cloudData.tickets) {
+    DB = cloudData;
+    localStorage.setItem(STORE_KEY, JSON.stringify(DB)); // cache only, no cloud write
+    setSyncStatus('synced');
+    return true;
+  }
+  // First-time use: cloud bin is empty → push local default to cloud
+  if (cloudData && Object.keys(cloudData).length === 0) {
+    await cloudSave(DB);
+    setSyncStatus('synced', 'Initialized');
+    return true;
+  }
+  setSyncStatus('error');
+  return false;
+}
+
 function loadData() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || defaultData(); }
   catch { return defaultData(); }
 }
-function saveData(d) { localStorage.setItem(STORE_KEY, JSON.stringify(d)); }
+function saveData(d) { 
+  localStorage.setItem(STORE_KEY, JSON.stringify(d));
+  cloudSaveDebounced(d);
+}
 
 function defaultData() {
   const now = Date.now();
@@ -992,10 +1095,21 @@ function goView(view, el) {
 // ═══════════════════════════════════════════════
 // CUSTOMER PORTAL
 // ═══════════════════════════════════════════════
-function trackTicket() {
+async function trackTicket() {
   const q = document.getElementById('cust-search').value.trim().toUpperCase();
   const res = document.getElementById('cust-result');
   if (!q) { toast('Enter a ticket number', 'err'); return; }
+
+  // Fresh-fetch from cloud so customer always sees the latest status
+  if (cloudIsConfigured()) {
+    res.innerHTML = `<div class="no-result"><div class="icon">⏳</div><h3>Loading...</h3><p>Fetching latest status from server...</p></div>`;
+    const fresh = await cloudLoad();
+    if (fresh && fresh.tickets) {
+      DB = fresh;
+      localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+    }
+  }
+
   const t = DB.tickets.find(x => x.id === q);
   if (!t) {
     res.innerHTML = `<div class="no-result"><div class="icon">🔍</div><h3>Ticket Not Found</h3><p>No service record found for <strong>${esc(q)}</strong>.<br>Please check the ticket number and try again.</p></div>`;
@@ -1648,8 +1762,24 @@ function toast(msg,type=''){
 // Customer tidak melihat tombol login. Staff hanya bisa akses via:
 //   URL hash: ...html#staff   atau   ...html#login   atau   ...html#admin
 
+async function manualRefresh() {
+  const ok = await cloudRefresh(false);
+  if (ok) {
+    toast('Data refreshed from cloud', 'ok');
+    // Re-render current admin view if visible
+    const adminActive = document.getElementById('pg-admin').classList.contains('active');
+    if (adminActive && typeof renderView === 'function') {
+      const titleEl = document.getElementById('view-title');
+      const t = (titleEl ? titleEl.textContent : 'dashboard').toLowerCase().replace(/\s/g,'-');
+      renderView(t === 'site-visits' ? 'site-visits' : t === 'tickets' ? 'tickets' : t === 'technicians' ? 'technicians' : t === 'settings' ? 'settings' : 'dashboard');
+    }
+  } else {
+    toast('Cloud not configured or offline. Using local data.', 'err');
+  }
+}
+
 // ─── INIT ───
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // Set today's date for visit form
   const todayInput = document.getElementById('v-date');
   if (todayInput) todayInput.value = new Date().toISOString().slice(0,10);
@@ -1677,8 +1807,22 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       goLogin();
     }
-    // Bersihkan hash dari URL biar nggak ke-share tidak sengaja
     history.replaceState(null, '', location.pathname + location.search);
+  }
+
+  // Initial cloud sync (silent — user already sees cached data immediately)
+  if (cloudIsConfigured()) {
+    setSyncStatus('syncing', 'Connecting...');
+    const ok = await cloudRefresh(true);
+    if (ok) {
+      // If admin view is currently active, re-render to show fresh data
+      const adminActive = document.getElementById('pg-admin').classList.contains('active');
+      if (adminActive && typeof renderView === 'function') {
+        renderView('dashboard');
+      }
+    }
+  } else {
+    setSyncStatus('offline', 'Cloud not configured');
   }
 });
 </script>
