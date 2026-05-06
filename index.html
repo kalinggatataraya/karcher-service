@@ -133,10 +133,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--t1); font-s
 }
 .s-received   { background: var(--blue-d);   color: var(--blue);   border: 1px solid rgba(90,180,255,.3); }
 .s-diagnosing { background: var(--orange-d); color: var(--orange); border: 1px solid rgba(255,159,64,.3); }
+.s-price-offering { background: rgba(245,158,11,.15); color: #f59e0b; border: 1px solid rgba(245,158,11,.35); }
+.s-indent-part { background: rgba(236,72,153,.12); color: #ec4899; border: 1px solid rgba(236,72,153,.3); }
 .s-repairing  { background: var(--yd);       color: var(--y);      border: 1px solid rgba(255,215,0,.3); }
 .s-testing    { background: rgba(167,139,250,.12); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
 .s-done       { background: var(--green-d);  color: var(--green);  border: 1px solid rgba(62,207,142,.3); }
 .s-delivered  { background: var(--b1);       color: var(--t3);     border: 1px solid var(--b2); }
+.s-drop       { background: var(--red-d);    color: var(--red);    border: 1px solid rgba(255,90,90,.3); }
 .s-onsite     { background: rgba(255,90,90,.12); color: var(--red); border: 1px solid rgba(255,90,90,.3); }
 
 .tc-progress {
@@ -157,6 +160,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--t1); font-s
 .ps-line { position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: var(--b2); z-index: 1; }
 .ps.done .ps-line { background: var(--green); }
 .ps:last-child .ps-line { display: none; }
+.ps.cancelled .ps-dot { background: var(--red-d); color: var(--red); border-color: rgba(255,90,90,.4); opacity: .6; }
+.ps.cancelled .ps-line { background: rgba(255,90,90,.2); }
+.ps.cancelled .ps-label { color: var(--red); opacity: .7; text-decoration: line-through; }
 .ps-label { font-size: 10px; color: var(--t3); margin-top: 6px; text-align: center; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .ps.done .ps-label   { color: var(--green); }
 .ps.active .ps-label { color: var(--y); }
@@ -526,10 +532,13 @@ textarea { resize: vertical; min-height: 80px; }
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-received">Received</span><span style="font-size:11px;color:var(--t2)">Machine registered</span></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-diagnosing">Diagnosing</span><span style="font-size:11px;color:var(--t2)">Finding the issue</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-price-offering">Price Offer</span><span style="font-size:11px;color:var(--t2)">Awaiting your approval</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-indent-part">Indent Part</span><span style="font-size:11px;color:var(--t2)">Ordering spare parts</span></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-repairing">Repairing</span><span style="font-size:11px;color:var(--t2)">Active repair</span></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-testing">Testing</span><span style="font-size:11px;color:var(--t2)">Quality check</span></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-done">Ready</span><span style="font-size:11px;color:var(--t2)">Pickup anytime</span></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-delivered">Delivered</span><span style="font-size:11px;color:var(--t2)">Completed</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="status-badge s-drop">Drop</span><span style="font-size:11px;color:var(--t2)">Service cancelled</span></div>
       </div>
     </div>
   </div>
@@ -590,6 +599,7 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="sb-section">Workshop</div>
     <button class="nav-item on" onclick="goView('dashboard',this)"><span class="ico">📊</span> Dashboard</button>
     <button class="nav-item" onclick="goView('tickets',this)"><span class="ico">🎫</span> Service Tickets</button>
+    <button class="nav-item" onclick="goView('workshop-schedule',this)"><span class="ico">🗓️</span> Workshop Schedule</button>
     <button class="nav-item" onclick="goView('new-ticket',this)"><span class="ico">➕</span> New Ticket</button>
 
     <div class="sb-section">Field</div>
@@ -681,6 +691,12 @@ textarea { resize: vertical; min-height: 80px; }
         </div>
       </div>
       <div class="f-row"><div class="f-label">Internal Notes</div><textarea id="f-notes" placeholder="Notes for technician (not visible to customer)…" style="min-height:60px"></textarea></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(visible to customer)</span></div><input type="date" id="f-eta"/></div>
+        <div class="f-row"><div class="f-label">Workshop Schedule <span style="color:var(--t3);font-weight:400">(when tech works on this)</span></div>
+          <div style="display:flex;gap:6px"><input type="date" id="f-workshop-date" style="flex:1"/><input type="time" id="f-workshop-time" style="width:90px"/></div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-ticket')">Cancel</button>
@@ -702,12 +718,16 @@ textarea { resize: vertical; min-height: 80px; }
         <select id="f-status">
           <option value="received">Received</option>
           <option value="diagnosing">Diagnosing</option>
+          <option value="price-offering">Price Offering — Awaiting Customer Approval</option>
+          <option value="indent-part">Indent Part — Ordering Spare Parts</option>
           <option value="repairing">Repairing</option>
           <option value="testing">Testing / QC</option>
           <option value="done">Done — Ready for Pickup</option>
           <option value="delivered">Delivered</option>
+          <option value="drop">Drop — Service Cancelled</option>
         </select>
       </div>
+      <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(optional update)</span></div><input type="date" id="f-status-eta"/></div>
       <div class="f-row"><div class="f-label">Update Note</div><textarea id="f-status-note" placeholder="What was done / findings…" style="min-height:80px"></textarea></div>
       <div class="f-row"><div class="f-label">Assign Technician</div><select id="f-status-tech"><option value="">— Keep current —</option></select></div>
     </div>
@@ -938,8 +958,8 @@ const STORE_KEY = 'ksc_data';
 // 3. Copy "Bin ID" (di URL setelah /b/...) dan "X-MASTER-KEY" (di Account Settings → API Keys)
 // 4. Ganti dua nilai di bawah ini → Save file → upload ulang ke GitHub Pages
 const CLOUD = {
-  BIN_ID:  '69f436c436566621a811083a',
-  API_KEY: '$2a$10$TcBgNzxmiDq03bR4EwGN5.ooNHyIP5CnSVCCaYNpY8qmkNV6KYp5S'
+  BIN_ID:  'PASTE_BIN_ID_DI_SINI',
+  API_KEY: 'PASTE_X_MASTER_KEY_DI_SINI'
 };
 
 const CLOUD_API = 'https://api.jsonbin.io/v3/b';
@@ -1115,12 +1135,16 @@ async function trackTicket() {
     res.innerHTML = `<div class="no-result"><div class="icon">🔍</div><h3>Ticket Not Found</h3><p>No service record found for <strong>${esc(q)}</strong>.<br>Please check the ticket number and try again.</p></div>`;
     return;
   }
-  const steps = ['received','diagnosing','repairing','testing','done','delivered'];
-  const stepLabels = ['Received','Diagnosing','Repairing','Testing','Ready','Delivered'];
-  const curIdx = steps.indexOf(t.status);
+
+  // Customer-facing progress steps (8 stages — DROP is shown separately as a banner)
+  const steps = ['received','diagnosing','price-offering','indent-part','repairing','testing','done','delivered'];
+  const stepLabels = ['Received','Diagnosing','Price Offer','Indent Part','Repairing','Testing','Ready','Delivered'];
+  const isDropped = t.status === 'drop';
+  const curIdx = isDropped ? -1 : steps.indexOf(t.status);
+
   const stepsHtml = steps.map((s,i) => {
-    const cls = i < curIdx ? 'done' : i === curIdx ? 'active' : '';
-    const dot = i < curIdx ? '✓' : i+1;
+    const cls = isDropped ? 'cancelled' : (i < curIdx ? 'done' : i === curIdx ? 'active' : '');
+    const dot = isDropped ? '✕' : (i < curIdx ? '✓' : i+1);
     return `<div class="ps ${cls}">
       <div class="ps-line"></div>
       <div class="ps-dot">${dot}</div>
@@ -1138,6 +1162,24 @@ async function trackTicket() {
       </div>
     </div>`).join('');
 
+  // Status-specific customer banner
+  let banner = '';
+  if (t.status === 'done') {
+    banner = '<div style="background:var(--green-d);color:var(--green);border:1px solid rgba(62,207,142,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">✅ Your machine is ready for pickup! Please bring this ticket number when collecting.</div>';
+  } else if (t.status === 'price-offering') {
+    banner = '<div style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.35);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">💰 Price quote is ready. Our team will contact you soon for approval before proceeding.</div>';
+  } else if (t.status === 'indent-part') {
+    banner = '<div style="background:rgba(236,72,153,.1);color:#ec4899;border:1px solid rgba(236,72,153,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">📦 Spare parts are being ordered. We will resume repair as soon as the parts arrive.</div>';
+  } else if (t.status === 'drop') {
+    banner = '<div style="background:var(--red-d);color:var(--red);border:1px solid rgba(255,90,90,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">⚠️ Service has been cancelled. Please contact our service center for further information.</div>';
+  }
+
+  // ETA display (prominent if exists and ticket not yet delivered/dropped)
+  const showEta = t.etaDate && !['delivered','drop'].includes(t.status);
+  const etaBlock = showEta
+    ? `<div style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px"><span style="font-size:22px">📅</span><div><div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Estimated Completion</div><div style="font-size:16px;font-weight:700;color:var(--y)">${fmtDateOnly(t.etaDate)}</div></div></div>`
+    : '';
+
   res.innerHTML = `<div class="ticket-result">
     <div class="tc-header">
       <div>
@@ -1149,13 +1191,14 @@ async function trackTicket() {
     </div>
     <div class="tc-progress"><div class="progress-steps">${stepsHtml}</div></div>
     <div class="tc-details">
+      ${etaBlock}
+      ${banner}
       <div class="tc-grid">
         <div class="tc-field"><label>Problem Reported</label><span>${esc(t.problem)}</span></div>
         <div class="tc-field"><label>Assigned Technician</label><span>${t.tech ? esc(t.tech) : 'Not yet assigned'}</span></div>
         <div class="tc-field"><label>Date Received</label><span>${fmtDate(t.createdAt)}</span></div>
         <div class="tc-field"><label>Last Updated</label><span>${fmtDate(t.updatedAt)}</span></div>
       </div>
-      ${t.status === 'done' ? '<div style="background:var(--green-d);color:var(--green);border:1px solid rgba(62,207,142,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-weight:600">✅ Your machine is ready for pickup! Please bring this ticket number when collecting.</div>' : ''}
       <div class="timeline"><div class="tl-title">Service History</div>${histHtml}</div>
     </div>
   </div>`;
@@ -1165,7 +1208,7 @@ async function trackTicket() {
 // VIEWS
 // ═══════════════════════════════════════════════
 function renderView(view) {
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', productivity:'Productivity', technicians:'Technicians', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'workshop-schedule':'Workshop Schedule', productivity:'Productivity', technicians:'Technicians', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
   c.innerHTML = '';
@@ -1174,6 +1217,7 @@ function renderView(view) {
   else if (view==='new-ticket') { openNewTicket(); renderView('tickets'); return; }
   else if (view==='site-visits') c.innerHTML = viewSiteVisits();
   else if (view==='new-visit') { openNewVisit(); renderView('site-visits'); return; }
+  else if (view==='workshop-schedule') c.innerHTML = viewWorkshopSchedule();
   else if (view==='productivity') c.innerHTML = viewProductivity();
   else if (view==='technicians') c.innerHTML = viewTechnicians();
   else if (view==='settings') c.innerHTML = viewSettings();
@@ -1333,6 +1377,156 @@ function viewSiteVisits() {
   </div>`;
 }
 
+// ─── WORKSHOP SCHEDULE ───
+// Menampilkan jadwal teknisi yang stay di workshop berdasarkan tiket aktif
+// yang punya field workshopDate. Dikelompokkan per tanggal & per teknisi.
+function viewWorkshopSchedule() {
+  const ACTIVE_STATUS = ['received','diagnosing','price-offering','indent-part','repairing','testing','done'];
+  // Hanya tiket aktif yang sudah punya jadwal workshop
+  const scheduled = DB.tickets.filter(t =>
+    t.workshopDate && ACTIVE_STATUS.includes(t.status)
+  );
+
+  // Group by date
+  const byDate = {};
+  scheduled.forEach(t => {
+    const d = t.workshopDate;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(t);
+  });
+  const sortedDates = Object.keys(byDate).sort();
+
+  // Today's & upcoming counts
+  const today = new Date().toISOString().slice(0,10);
+  const todayCount = (byDate[today] || []).length;
+  const upcomingCount = sortedDates.filter(d => d > today).reduce((a,d)=>a+byDate[d].length,0);
+  const overdueCount = sortedDates.filter(d => d < today).reduce((a,d)=>a+byDate[d].length,0);
+
+  // Tickets without workshop date yet (so admin can quickly assign)
+  const unscheduled = DB.tickets.filter(t =>
+    !t.workshopDate && ACTIVE_STATUS.includes(t.status)
+  );
+
+  // Build cards per date
+  const dateCards = sortedDates.map(date => {
+    const tickets = byDate[date].sort((a,b) => (a.workshopTime||'99:99').localeCompare(b.workshopTime||'99:99'));
+    const isToday = date === today;
+    const isPast = date < today;
+
+    // Group tickets by technician for this date
+    const byTech = {};
+    tickets.forEach(t => {
+      const techName = t.tech || '(Unassigned)';
+      if (!byTech[techName]) byTech[techName] = [];
+      byTech[techName].push(t);
+    });
+
+    const techBlocks = Object.keys(byTech).sort().map(techName => {
+      const tixs = byTech[techName];
+      const color = techColor(techName);
+      const items = tixs.map(t => `
+        <div onclick="openStatusModal('${t.id}')" style="cursor:pointer;background:var(--b1);border:1px solid var(--b2);border-left:3px solid ${color};border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--b2)'" onmouseout="this.style.background='var(--b1)'">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);min-width:48px">${t.workshopTime||'—:—'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.id)} · ${esc(t.customer)}</div>
+            <div style="font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.machine)}</div>
+          </div>
+          <span class="status-badge s-${t.status}" style="font-size:10px">${statusLabel(t.status)}</span>
+        </div>
+      `).join('');
+      return `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed var(--b2)">
+            <div style="width:10px;height:10px;border-radius:50%;background:${color}"></div>
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">${esc(techName)}</div>
+            <div style="font-size:11px;color:var(--t3)">${tixs.length} ticket${tixs.length>1?'s':''}</div>
+          </div>
+          ${items}
+        </div>
+      `;
+    }).join('');
+
+    const dateLabel = fmtDateOnly(date);
+    const dateBadge = isToday
+      ? '<span style="background:var(--y);color:var(--bg);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.05em">TODAY</span>'
+      : isPast
+        ? '<span style="background:var(--red-d);color:var(--red);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">OVERDUE</span>'
+        : '<span style="background:var(--blue-d);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">UPCOMING</span>';
+
+    return `
+      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:700;color:var(--t1)">📅 ${dateLabel}</div>
+          ${dateBadge}
+          <div style="margin-left:auto;font-size:12px;color:var(--t3)">${tickets.length} ticket${tickets.length>1?'s':''} · ${Object.keys(byTech).length} tech${Object.keys(byTech).length>1?'s':''}</div>
+        </div>
+        ${techBlocks}
+      </div>
+    `;
+  }).join('');
+
+  // Unscheduled tickets section
+  const unscheduledBlock = unscheduled.length === 0 ? '' : `
+    <div style="background:var(--b0);border:1px solid var(--orange-d);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:var(--orange)">⚠️ Tickets Without Workshop Schedule</div>
+        <div style="margin-left:auto;font-size:12px;color:var(--t3)">${unscheduled.length} ticket${unscheduled.length>1?'s':''}</div>
+      </div>
+      ${unscheduled.map(t => `
+        <div onclick="openEditTicket('${t.id}')" style="cursor:pointer;background:var(--b1);border:1px solid var(--b2);border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='var(--b2)'" onmouseout="this.style.background='var(--b1)'">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(t.id)} · ${esc(t.customer)}</div>
+            <div style="font-size:11px;color:var(--t3)">${esc(t.machine)} — ${esc(t.tech||'No tech')}</div>
+          </div>
+          <span class="status-badge s-${t.status}" style="font-size:10px">${statusLabel(t.status)}</span>
+          <button class="btn btn-sm btn-y" onclick="event.stopPropagation();openEditTicket('${t.id}')">Schedule</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Stat boxes
+  const stats = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Today</div>
+        <div style="font-size:28px;font-weight:800;color:var(--y)">${todayCount}</div>
+      </div>
+      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Upcoming</div>
+        <div style="font-size:28px;font-weight:800;color:var(--blue)">${upcomingCount}</div>
+      </div>
+      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Overdue</div>
+        <div style="font-size:28px;font-weight:800;color:var(--red)">${overdueCount}</div>
+      </div>
+      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Unscheduled</div>
+        <div style="font-size:28px;font-weight:800;color:var(--orange)">${unscheduled.length}</div>
+      </div>
+    </div>
+  `;
+
+  const empty = sortedDates.length === 0 && unscheduled.length === 0
+    ? `<div style="background:var(--b0);border:1px dashed var(--b2);border-radius:var(--r);padding:60px 20px;text-align:center;color:var(--t3)">
+        <div style="font-size:42px;margin-bottom:10px">🗓️</div>
+        <div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">No workshop schedule yet</div>
+        <div style="font-size:12px">Schedule jobs by setting "Workshop Schedule" date when creating or editing a ticket.</div>
+      </div>`
+    : '';
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--t2)">Workshop schedule for technicians staying on-site (based on tickets with assigned workshop dates)</div>
+      <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
+    </div>
+    ${stats}
+    ${empty}
+    ${unscheduledBlock}
+    ${dateCards}
+  `;
+}
+
 // ─── PRODUCTIVITY ───
 function viewProductivity() {
   const techs = DB.technicians;
@@ -1442,9 +1636,10 @@ function openNewTicket() {
   editingTicketId = null;
   document.getElementById('modal-ticket-title').textContent = 'New Service Ticket';
   document.getElementById('save-ticket-btn').textContent = 'Create Ticket';
-  ['f-customer','f-phone','f-machine','f-serial','f-notes'].forEach(id => document.getElementById(id).value='');
+  ['f-customer','f-phone','f-machine','f-serial','f-notes','f-eta','f-workshop-date','f-workshop-time'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-mactype').value='Pressure Washer';
   document.getElementById('f-priority').value='normal';
+  document.getElementById('f-problem').value='';
   populateTechSelect('f-tech');
   openModal('modal-ticket');
 }
@@ -1463,6 +1658,9 @@ function openEditTicket(id) {
   document.getElementById('f-problem').value = t.problem;
   document.getElementById('f-priority').value = t.priority;
   document.getElementById('f-notes').value = t.notes;
+  document.getElementById('f-eta').value = t.etaDate || '';
+  document.getElementById('f-workshop-date').value = t.workshopDate || '';
+  document.getElementById('f-workshop-time').value = t.workshopTime || '';
   populateTechSelect('f-tech', t.tech);
   openModal('modal-ticket');
 }
@@ -1473,13 +1671,22 @@ function saveTicket() {
   const problem  = document.getElementById('f-problem').value.trim();
   if (!customer || !machine || !problem) { toast('Fill required fields', 'err'); return; }
 
+  const etaDate = document.getElementById('f-eta').value;
+  const workshopDate = document.getElementById('f-workshop-date').value;
+  const workshopTime = document.getElementById('f-workshop-time').value;
+
   if (editingTicketId) {
     const t = DB.tickets.find(x=>x.id===editingTicketId);
-    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), updatedAt:Date.now() });
+    const oldEta = t.etaDate;
+    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, workshopDate, workshopTime, updatedAt:Date.now() });
+    // Log ETA change in history kalau berubah
+    if (etaDate && etaDate !== oldEta) {
+      t.history.push({ ts:Date.now(), action:'ETA Updated', note:'Estimated completion date set to ' + fmtDateOnly(etaDate), tech:'Admin' });
+    }
     toast('Ticket updated', 'ok');
   } else {
     const id = newTicketId();
-    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center',tech:'Admin'}] });
+    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, workshopDate, workshopTime, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
     toast('Ticket created: ' + id, 'ok');
   }
   saveData(DB);
@@ -1499,6 +1706,7 @@ function openStatusModal(id) {
   if (!t) return;
   document.getElementById('status-ticket-id').textContent = t.id + ' — ' + t.machine;
   document.getElementById('f-status').value = t.status;
+  document.getElementById('f-status-eta').value = t.etaDate || '';
   document.getElementById('f-status-note').value = '';
   populateTechSelect('f-status-tech', t.tech, true);
   document.getElementById('modal-status').dataset.ticketId = id;
@@ -1510,12 +1718,21 @@ function saveStatus() {
   const t = DB.tickets.find(x=>x.id===id);
   if (!t) return;
   const newStatus = document.getElementById('f-status').value;
+  const newEta = document.getElementById('f-status-eta').value;
   const note = document.getElementById('f-status-note').value.trim();
   const newTech = document.getElementById('f-status-tech').value;
+  const oldEta = t.etaDate;
   t.status = newStatus;
   t.updatedAt = Date.now();
   if (newTech) t.tech = newTech;
-  t.history.push({ ts:Date.now(), action:statusLabel(newStatus), note, tech: t.tech||'Admin' });
+  if (newEta !== oldEta) t.etaDate = newEta;
+
+  // Compose history note: include ETA change if any
+  let histNote = note;
+  if (newEta && newEta !== oldEta) {
+    histNote = (note ? note + ' • ' : '') + 'ETA: ' + fmtDateOnly(newEta);
+  }
+  t.history.push({ ts:Date.now(), action:statusLabel(newStatus), note:histNote, tech: t.tech||'Admin' });
   saveData(DB);
   closeModal('modal-status');
   renderView('tickets');
@@ -1719,7 +1936,7 @@ function populateTechSelect(selectId, current='', keepEmpty=false) {
 }
 
 function statusLabel(s) {
-  const m={received:'Received',diagnosing:'Diagnosing',repairing:'Repairing',testing:'Testing',done:'Ready',delivered:'Delivered',onsite:'On-Site'};
+  const m={received:'Received',diagnosing:'Diagnosing','price-offering':'Price Offering','indent-part':'Indent Part',repairing:'Repairing',testing:'Testing',done:'Ready',delivered:'Delivered',drop:'Drop',onsite:'On-Site'};
   return m[s]||s;
 }
 function prioBadge(p) {
@@ -1734,6 +1951,13 @@ function fmtDate(ts) {
   if(!ts)return'—';
   const d=new Date(ts);
   return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtDateOnly(dateStr) {
+  // dateStr is 'YYYY-MM-DD' from <input type="date">
+  if(!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString('id-ID',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
 }
 function relTime(ts) {
   const diff=(Date.now()-ts)/1000;
