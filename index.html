@@ -1027,24 +1027,44 @@ function cloudSaveDebounced(data) {
 }
 
 // Pull latest data from cloud → update DB → re-render current view
+// SAFE LOGIC: Never overwrites local data with empty cloud data.
+// - Cloud has tickets > 0 → use cloud (cloud wins)
+// - Cloud is empty BUT local has data → push local to cloud (no data loss)
+// - Both empty → just mark synced
 async function cloudRefresh(silent) {
   if (!cloudIsConfigured()) { setSyncStatus('offline'); return false; }
   if (!silent) setSyncStatus('syncing', 'Loading...');
   const cloudData = await cloudLoad();
-  if (cloudData && cloudData.tickets) {
+
+  if (cloudData === null) {
+    setSyncStatus('error');
+    return false;
+  }
+
+  const cloudHasTickets = cloudData && Array.isArray(cloudData.tickets) && cloudData.tickets.length > 0;
+  const localHasTickets = DB && Array.isArray(DB.tickets) && DB.tickets.length > 0;
+
+  // Cloud has actual data → pull from cloud (cloud is source of truth)
+  if (cloudHasTickets) {
     DB = cloudData;
-    localStorage.setItem(STORE_KEY, JSON.stringify(DB)); // cache only, no cloud write
+    // Make sure visits/technicians arrays exist
+    if (!Array.isArray(DB.visits)) DB.visits = [];
+    if (!Array.isArray(DB.technicians)) DB.technicians = [];
+    localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     setSyncStatus('synced');
     return true;
   }
-  // First-time use: cloud bin is empty → push local default to cloud
-  if (cloudData && Object.keys(cloudData).length === 0) {
-    await cloudSave(DB);
-    setSyncStatus('synced', 'Initialized');
-    return true;
+
+  // Cloud is empty (no tickets) → push local data UP to cloud (preserve local!)
+  if (localHasTickets) {
+    const ok = await cloudSave(DB);
+    setSyncStatus(ok ? 'synced' : 'error', ok ? 'Local data uploaded' : 'Upload failed');
+    return ok;
   }
-  setSyncStatus('error');
-  return false;
+
+  // Both empty → nothing to sync
+  setSyncStatus('synced', 'Empty');
+  return true;
 }
 
 function loadData() {
@@ -1124,8 +1144,11 @@ async function trackTicket() {
   if (cloudIsConfigured()) {
     res.innerHTML = `<div class="no-result"><div class="icon">⏳</div><h3>Loading...</h3><p>Fetching latest status from server...</p></div>`;
     const fresh = await cloudLoad();
-    if (fresh && fresh.tickets) {
+    // Only replace local if cloud actually has tickets (don't wipe local with empty cloud)
+    if (fresh && Array.isArray(fresh.tickets) && fresh.tickets.length > 0) {
       DB = fresh;
+      if (!Array.isArray(DB.visits)) DB.visits = [];
+      if (!Array.isArray(DB.technicians)) DB.technicians = [];
       localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     }
   }
