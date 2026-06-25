@@ -525,6 +525,15 @@ textarea { resize: vertical; min-height: 80px; }
       <div style="font-size:12px;color:var(--t3);margin-top:10px">💡 Your ticket number was given when you dropped off your machine at our service center.</div>
     </div>
 
+    <div class="trial-cta" style="margin-top:18px;background:linear-gradient(135deg,rgba(255,215,0,.08),rgba(255,159,64,.06));border:1px solid rgba(255,215,0,.25);border-radius:var(--r3);padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="font-size:30px">🧪</div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-family:var(--cond);font-size:17px;font-weight:700">Coba Dulu Sebelum Beli — Trial Unit Kärcher</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:3px">Tim sales dapat mengajukan unit trial untuk customer. Pengajuan ditinjau & disetujui Sales Manager, lalu didukung tim Service Center. Sudah punya nomor TRL-…? Ketik di kolom di atas untuk cek status.</div>
+      </div>
+      <button class="btn btn-y" onclick="openTrialRequest()">+ Ajukan Trial Unit</button>
+    </div>
+
     <div id="cust-result"></div>
 
     <div style="margin-top:40px;padding:20px;background:var(--bg2);border:1px solid var(--b2);border-radius:var(--r3)">
@@ -605,6 +614,9 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="sb-section">Field</div>
     <button class="nav-item" onclick="goView('site-visits',this)"><span class="ico">🚐</span> Site Visits</button>
     <button class="nav-item" onclick="goView('new-visit',this)"><span class="ico">📍</span> New Visit</button>
+
+    <div class="sb-section">Sales</div>
+    <button class="nav-item" onclick="goView('trials',this)"><span class="ico">🧪</span> Trial Unit <span id="trial-badge" class="trial-badge" style="display:none"></span></button>
 
     <div class="sb-section">Team</div>
     <button class="nav-item" onclick="goView('productivity',this)"><span class="ico">📈</span> Productivity</button>
@@ -803,6 +815,62 @@ textarea { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- Trial Unit Request Modal (public) -->
+<div class="modal-bg" id="modal-trial">
+  <div class="modal">
+    <div class="modal-hd"><h2>Ajukan Trial Unit Kärcher</h2><button class="modal-close" onclick="closeModal('modal-trial')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px">Coba mesin Kärcher sebelum membeli. Pengajuan akan ditinjau & <b>disetujui Sales Manager</b> sebelum diproses tim Service Center.</div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Nama Perusahaan / Customer *</div><input type="text" id="tr-company" placeholder="PT / CV / nama"/></div>
+        <div class="f-row"><div class="f-label">Nama PIC *</div><input type="text" id="tr-pic" placeholder="Nama kontak"/></div>
+      </div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Telepon / WhatsApp *</div><input type="text" id="tr-phone" placeholder="+62 812…"/></div>
+        <div class="f-row"><div class="f-label">Email (untuk update status)</div><input type="email" id="tr-email" placeholder="nama@perusahaan.com"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Mesin Kärcher yang Diminati *</div><input type="text" id="tr-machine" placeholder="mis. HD 7/18, K5 Premium, BR 45/22"/></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Jumlah Unit</div><input type="number" id="tr-qty" min="1" value="1"/></div>
+        <div class="f-row"><div class="f-label">Durasi Trial (hari)</div><input type="number" id="tr-duration" min="1" value="7"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Lokasi / Alamat Trial</div><input type="text" id="tr-address" placeholder="Alamat lokasi penggunaan unit"/></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Tanggal Mulai Diinginkan</div><input type="date" id="tr-start"/></div>
+        <div class="f-row"><div class="f-label">Sales Pengaju *</div><input type="text" id="tr-sales" placeholder="Nama sales Anda"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Sales Manager (penyetuju)</div><select id="tr-manager"><option value="">(Belum ada Sales Manager terdaftar)</option></select></div>
+      <div class="f-row"><div class="f-label">Catatan / Alasan</div><textarea id="tr-notes" placeholder="Kebutuhan, jenis aplikasi pembersihan, dll" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-trial')">Batal</button>
+      <button class="btn btn-y" id="tr-submit-btn" onclick="submitTrial()">Kirim Pengajuan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Trial Process Modal (service center) -->
+<div class="modal-bg" id="modal-trial-process">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hd"><h2>Mulai / Support Trial</h2><button class="modal-close" onclick="closeModal('modal-trial-process')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="tp-id"/>
+      <div class="f-row"><div class="f-label">Pengajuan</div><div id="tp-trial-label" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Teknisi Penanggung Jawab</div><select id="tp-tech"><option value="">— Unassigned —</option></select></div>
+        <div class="f-row"><div class="f-label">Tgl Kirim / Mulai</div><input type="date" id="tp-deliver"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Catatan</div><textarea id="tp-note" placeholder="Unit yang dikirim, kondisi, instruksi…" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-trial-process')">Batal</button>
+      <button class="btn btn-y" onclick="saveTrialProcess()">Mulai Trial</button>
+    </div>
+  </div>
+</div>
+
+<style>.trial-badge{background:var(--red);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:9px;padding:0 5px;margin-left:4px;display:inline-block}</style>
+
 <div id="toasts"></div>
 
 <script>
@@ -821,6 +889,7 @@ function getUsers() {
   // Default credentials
   return [
     { username: 'admin',   password: 'karcher2025', role: 'Service Manager',  name: 'Admin' },
+    { username: 'salesmgr', password: 'sales2025',  role: 'Sales Manager',    name: 'Sales Manager' },
     { username: 'teknisi1', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 1' },
     { username: 'teknisi2', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 2' },
   ];
@@ -963,6 +1032,10 @@ const CLOUD = {
 };
 
 const CLOUD_API = 'https://api.jsonbin.io/v3/b';
+
+// ── Email notifications (reuse Sales Monitor's Supabase send-reminder function; Gmail SMTP, no extra cost) ──
+const EMAIL_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/send-reminder';
+const EMAIL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
 const cloudIsConfigured = () => CLOUD.BIN_ID && CLOUD.API_KEY 
   && !CLOUD.BIN_ID.includes('PASTE') && !CLOUD.API_KEY.includes('PASTE');
 
@@ -1041,15 +1114,12 @@ async function cloudRefresh(silent) {
     return false;
   }
 
-  const cloudHasTickets = cloudData && Array.isArray(cloudData.tickets) && cloudData.tickets.length > 0;
-  const localHasTickets = DB && Array.isArray(DB.tickets) && DB.tickets.length > 0;
+  const cloudHasData = cloudData && ((Array.isArray(cloudData.tickets)&&cloudData.tickets.length>0)||(Array.isArray(cloudData.trials)&&cloudData.trials.length>0)||(Array.isArray(cloudData.visits)&&cloudData.visits.length>0));
+  const localHasTickets = DB && ((Array.isArray(DB.tickets)&&DB.tickets.length>0)||(Array.isArray(DB.trials)&&DB.trials.length>0));
 
   // Cloud has actual data → pull from cloud (cloud is source of truth)
-  if (cloudHasTickets) {
-    DB = cloudData;
-    // Make sure visits/technicians arrays exist
-    if (!Array.isArray(DB.visits)) DB.visits = [];
-    if (!Array.isArray(DB.technicians)) DB.technicians = [];
+  if (cloudHasData) {
+    DB = normalizeDB(cloudData);
     localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     setSyncStatus('synced');
     return true;
@@ -1096,11 +1166,14 @@ function defaultData() {
       { id:'t1', name:'Ahmad Rizki', spec:'Pressure Washer', phone:'0812-1111-2222', color:'#FFD700' },
       { id:'t2', name:'Doni Prasetyo', spec:'All Types', phone:'0813-3333-4444', color:'#3ecf8e' },
       { id:'t3', name:'Siti Rahayu', spec:'Industrial', phone:'0814-5555-6666', color:'#5ab4ff' },
-    ]
+    ],
+    trials: [],
+    settings: { salesManagers: [], scEmails: '' }
   };
 }
 
-let DB = loadData();
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; return d; }
+let DB = normalizeDB(loadData());
 
 // ═══════════════════════════════════════════════
 // PAGE ROUTING
@@ -1145,14 +1218,13 @@ async function trackTicket() {
     res.innerHTML = `<div class="no-result"><div class="icon">⏳</div><h3>Loading...</h3><p>Fetching latest status from server...</p></div>`;
     const fresh = await cloudLoad();
     // Only replace local if cloud actually has tickets (don't wipe local with empty cloud)
-    if (fresh && Array.isArray(fresh.tickets) && fresh.tickets.length > 0) {
-      DB = fresh;
-      if (!Array.isArray(DB.visits)) DB.visits = [];
-      if (!Array.isArray(DB.technicians)) DB.technicians = [];
+    if (fresh && ((Array.isArray(fresh.tickets)&&fresh.tickets.length>0)||(Array.isArray(fresh.trials)&&fresh.trials.length>0))) {
+      DB = normalizeDB(fresh);
       localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     }
   }
 
+  if (q.startsWith('TRL')) { renderTrialResult(q, res); return; }
   const t = DB.tickets.find(x => x.id === q);
   if (!t) {
     res.innerHTML = `<div class="no-result"><div class="icon">🔍</div><h3>Ticket Not Found</h3><p>No service record found for <strong>${esc(q)}</strong>.<br>Please check the ticket number and try again.</p></div>`;
@@ -1231,7 +1303,7 @@ async function trackTicket() {
 // VIEWS
 // ═══════════════════════════════════════════════
 function renderView(view) {
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'workshop-schedule':'Workshop Schedule', productivity:'Productivity', technicians:'Technicians', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'workshop-schedule':'Workshop Schedule', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
   c.innerHTML = '';
@@ -1243,7 +1315,9 @@ function renderView(view) {
   else if (view==='workshop-schedule') c.innerHTML = viewWorkshopSchedule();
   else if (view==='productivity') c.innerHTML = viewProductivity();
   else if (view==='technicians') c.innerHTML = viewTechnicians();
+  else if (view==='trials') c.innerHTML = viewTrials();
   else if (view==='settings') c.innerHTML = viewSettings();
+  updateTrialBadge();
 }
 
 // ─── DASHBOARD ───
@@ -1857,6 +1931,8 @@ function viewSettings() {
       </table>
     </div>
 
+    ${trialSettingsCard()}
+
     <div class="card">
       <div class="card-hd"><h3>ℹ️ Info Sesi</h3></div>
       <div class="card-body" style="padding:16px;font-size:13px;color:var(--t2);line-height:2">
@@ -1899,7 +1975,7 @@ function openAddUser() {
   if (/\s/.test(username)) { toast('Username tidak boleh mengandung spasi', 'err'); return; }
   const users = getUsers();
   if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) { toast('Username sudah digunakan', 'err'); return; }
-  const role = prompt('Role (e.g. Technician, Service Manager):', 'Technician');
+  const role = prompt('Role (Technician / Service Manager / Sales Manager):', 'Technician');
   const password = prompt('Password awal (min 6 karakter):');
   if (!password || password.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
   users.push({ username: username.trim(), password, role: (role||'Technician').trim(), name: name.trim() });
@@ -2005,6 +2081,252 @@ function toast(msg,type=''){
   setTimeout(()=>el.remove(),3500);
 }
 
+// ═══════════════════════════════════════════════
+// TRIAL UNIT (Pengajuan Trial Unit)
+// Flow: Sales (form publik) → pending → Sales Manager approve/reject
+//       → approved → Service Center support → running → done
+// ═══════════════════════════════════════════════
+const TRIAL_STATUS = {
+  pending:  { label:'Menunggu Approval',       bg:'rgba(245,158,11,.12)', col:'#f59e0b', bd:'rgba(245,158,11,.35)' },
+  approved: { label:'Disetujui',               bg:'rgba(90,180,255,.12)', col:'#5ab4ff', bd:'rgba(90,180,255,.35)' },
+  rejected: { label:'Ditolak',                 bg:'rgba(255,90,90,.12)',  col:'#ff5a5a', bd:'rgba(255,90,90,.30)'  },
+  running:  { label:'Trial Berjalan',          bg:'rgba(62,207,142,.12)', col:'#3ecf8e', bd:'rgba(62,207,142,.30)' },
+  done:     { label:'Selesai / Dikembalikan',  bg:'rgba(136,146,170,.15)',col:'#8892aa', bd:'rgba(136,146,170,.30)'}
+};
+function trialStatusLabel(x){ return (TRIAL_STATUS[x]||{}).label || x; }
+function trialBadge(x){ const t=TRIAL_STATUS[x]||TRIAL_STATUS.pending; return `<span style="background:${t.bg};color:${t.col};border:1px solid ${t.bd};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${t.label}</span>`; }
+function canApproveTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Sales Manager','Service Manager'].includes(r); }
+function canProcessTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Service Manager','Technician'].includes(r); }
+function getSettings(){ if(!DB.settings||typeof DB.settings!=='object') DB.settings={}; return DB.settings; }
+function getSalesManagers(){ const a=getSettings().salesManagers; return Array.isArray(a)?a:[]; }
+function parseEmails(str){ return String(str||'').split(/[,;\n\s]+/).map(e=>e.trim()).filter(e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)); }
+function findTrial(id){ return (DB.trials||[]).find(t=>t.id===id); }
+
+// ── Email helper (reuses Sales Monitor's send-reminder edge function) ──
+async function sendTrialEmail(to, subject, html){
+  const list = Array.isArray(to)?to.filter(Boolean):parseEmails(to);
+  if(!list.length) return false;
+  try{
+    const res = await fetch(EMAIL_FN_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey':EMAIL_ANON_KEY, 'Authorization':'Bearer '+EMAIL_ANON_KEY },
+      body: JSON.stringify({ to:list, subject, html, from:'Kärcher Trial Unit' })
+    });
+    return res.ok;
+  }catch(e){ console.error('[Trial email] failed:', e); return false; }
+}
+function trialEmailHtml(title, intro, tr, extraRows){
+  const row=(k,v)=> (v||v===0)?`<tr><td style="padding:5px 12px;color:#888;font-size:13px;white-space:nowrap">${k}</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(v)}</td></tr>`:'';
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;border:1px solid #eee;border-radius:10px;overflow:hidden">
+    <div style="background:#1a1a1a;color:#FFD700;padding:16px 20px;font-weight:700;font-size:16px">KÄRCHER · Trial Unit</div>
+    <div style="padding:20px">
+      <h2 style="margin:0 0 6px;font-size:18px;color:#111">${title}</h2>
+      <p style="color:#555;font-size:14px;margin:0 0 14px;line-height:1.5">${intro}</p>
+      <table style="width:100%;border-collapse:collapse;background:#fafafa;border-radius:8px">
+        ${row('No. Pengajuan', tr.id)}${row('Customer', tr.company)}${row('PIC', tr.pic)}${row('Telepon', tr.phone)}${row('Email', tr.email)}${row('Mesin Diminati', tr.machineType)}${row('Jumlah Unit', tr.qty)}${row('Lokasi Trial', tr.address)}${row('Tgl Mulai', tr.startDate)}${row('Durasi (hari)', tr.duration)}${row('Sales Pengaju', tr.salesName)}${row('Sales Manager', tr.managerName)}${row('Catatan', tr.notes)}${extraRows||''}
+      </table>
+      <p style="color:#999;font-size:12px;margin-top:16px">Email otomatis dari Sistem Service Center Kärcher · PT Kalingga Tataraya.</p>
+    </div></div>`;
+}
+
+// ── Public submission ──
+function openTrialRequest(){
+  ['tr-company','tr-pic','tr-phone','tr-email','tr-machine','tr-address','tr-notes','tr-sales'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  const q=document.getElementById('tr-qty'); if(q) q.value='1';
+  const d=document.getElementById('tr-duration'); if(d) d.value='7';
+  const sd=document.getElementById('tr-start'); if(sd) sd.value=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  const sel=document.getElementById('tr-manager');
+  if(sel){ const m=getSalesManagers();
+    sel.innerHTML = m.length ? m.map((x,i)=>`<option value="${i}">${esc(x.name)}</option>`).join('') : '<option value="">(Belum ada Sales Manager terdaftar)</option>';
+  }
+  openModal('modal-trial');
+}
+async function submitTrial(){
+  const g=id=>{const el=document.getElementById(id); return el?el.value.trim():'';};
+  const company=g('tr-company'), pic=g('tr-pic'), phone=g('tr-phone'), email=g('tr-email'), machine=g('tr-machine'), salesName=g('tr-sales');
+  if(!company||!pic||!phone||!machine||!salesName){ toast('Lengkapi kolom wajib bertanda *','err'); return; }
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Format email tidak valid','err'); return; }
+  const mgrs=getSalesManagers();
+  const mi=(document.getElementById('tr-manager')||{}).value;
+  const manager=(mi!=='' && mi!=null && mgrs[mi])?mgrs[mi]:null;
+  const btn=document.getElementById('tr-submit-btn'); if(btn){ btn.disabled=true; btn.textContent='Mengirim…'; }
+
+  let base=DB;
+  if(cloudIsConfigured()){
+    const fresh=await cloudLoad();
+    if(fresh && ((Array.isArray(fresh.tickets)&&fresh.tickets.length)||(Array.isArray(fresh.trials)&&fresh.trials.length))) base=normalizeDB(fresh);
+  }
+  base=normalizeDB(base);
+  const now=Date.now();
+  const y=new Date().getFullYear();
+  const id=`TRL-${y}-`+String(base.trials.filter(t=>String(t.id).includes('TRL-'+y)).length+1).padStart(3,'0');
+  const tr={ id, company, pic, phone, email, machineType:machine, qty:g('tr-qty')||'1', address:g('tr-address'), startDate:g('tr-start'), duration:g('tr-duration')||'', salesName, managerName:manager?manager.name:'', managerEmail:manager?manager.email:'', notes:g('tr-notes'), status:'pending', createdAt:now, updatedAt:now, history:[{ts:now,action:'Pengajuan dibuat',by:salesName,note:'Diajukan via form publik'}] };
+  base.trials.push(tr);
+  DB=base; saveData(DB);
+
+  closeModal('modal-trial');
+  toast('Pengajuan terkirim: '+id,'ok');
+  const res=document.getElementById('cust-result');
+  if(res) res.innerHTML=`<div class="ticket-result" style="text-align:center;padding:30px"><div style="font-size:42px">✅</div><h3 style="margin:8px 0;color:var(--green)">Pengajuan Trial Terkirim</h3><p style="color:var(--t2);line-height:1.6">Nomor pengajuan Anda: <strong style="color:var(--y);font-family:var(--mono)">${id}</strong><br>Simpan nomor ini untuk cek status. <b>Sales Manager</b> akan meninjau pengajuan, lalu tim Service Center menindaklanjuti.</p></div>`;
+
+  const sc=getSettings().scEmails;
+  if(manager&&manager.email) sendTrialEmail(manager.email, `[Trial Unit] Pengajuan baru ${id} — butuh approval Anda`, trialEmailHtml('Pengajuan Trial Unit Baru', `Halo ${esc(manager.name)}, ada pengajuan trial unit baru dari <b>${esc(salesName)}</b> yang menunggu persetujuan Anda. Buka portal staff untuk menyetujui / menolak.`, tr));
+  if(sc) sendTrialEmail(sc, `[Trial Unit] Pengajuan baru ${id} (menunggu approval)`, trialEmailHtml('Pengajuan Trial Unit Baru (FYI)', `Ada pengajuan trial unit baru. Tim Service Center dapat memproses setelah disetujui Sales Manager.`, tr));
+  if(btn){ btn.disabled=false; btn.textContent='Kirim Pengajuan'; }
+}
+
+// ── Staff view ──
+function setTrialFilter(f){ DB._trialFilter=f; renderView('trials'); }
+function viewTrials(){
+  const trials=(DB.trials||[]).slice().sort((a,b)=>b.createdAt-a.createdAt);
+  const f=DB._trialFilter||'all';
+  const c={ all:trials.length, pending:0, approved:0, running:0, done:0, rejected:0 };
+  trials.forEach(t=>{ if(c[t.status]!=null) c[t.status]++; });
+  const shown=f==='all'?trials:trials.filter(t=>t.status===f);
+  const tab=(k,l)=>`<button class="btn btn-sm ${f===k?'btn-y':''}" onclick="setTrialFilter('${k}')">${l} (${c[k]})</button>`;
+  const cards=shown.map(t=>{
+    const apr=t.status==='pending'&&canApproveTrial();
+    const start=t.status==='approved'&&canProcessTrial();
+    const fin=t.status==='running'&&canProcessTrial();
+    const hist=(t.history||[]).slice().reverse().map(h=>`<div style="display:flex;gap:8px;font-size:12px;color:var(--t2);margin-top:5px"><span style="color:var(--t3);min-width:120px;flex-shrink:0">${fmtDate(h.ts)}</span><span><b style="color:var(--t1)">${esc(h.action)}</b>${h.by?` · ${esc(h.by)}`:''}${h.note?`<br><span style="color:var(--t3)">${esc(h.note)}</span>`:''}</span></div>`).join('');
+    return `<div class="visit-card">
+      <div class="vc-top"><div class="vc-icon">🧪</div><div><div class="vc-title">${esc(t.company)}</div><div class="vc-id">${esc(t.id)}</div></div><div style="margin-left:auto">${trialBadge(t.status)}</div></div>
+      <div class="vc-meta">
+        <div class="vc-field"><label>Mesin</label><span>${esc(t.machineType)}${t.qty?` · ${esc(t.qty)} unit`:''}</span></div>
+        <div class="vc-field"><label>PIC</label><span>${esc(t.pic)} · ${esc(t.phone)}</span></div>
+        <div class="vc-field"><label>Tgl Mulai</label><span>${t.startDate?fmtDateOnly(t.startDate):'—'}${t.duration?` (${esc(t.duration)} hari)`:''}</span></div>
+        <div class="vc-field"><label>Sales</label><span>${esc(t.salesName)}</span></div>
+        <div class="vc-field" style="grid-column:span 2"><label>Lokasi</label><span>${esc(t.address)||'—'}</span></div>
+        ${t.notes?`<div class="vc-field" style="grid-column:span 2"><label>Catatan</label><span>${esc(t.notes)}</span></div>`:''}
+        ${t.assignedTech?`<div class="vc-field"><label>Teknisi</label><span>${esc(t.assignedTech)}</span></div>`:''}
+        ${t.approvedBy?`<div class="vc-field"><label>Disetujui oleh</label><span>${esc(t.approvedBy)}</span></div>`:''}
+        ${t.status==='rejected'&&t.rejectReason?`<div class="vc-field" style="grid-column:span 2"><label>Alasan ditolak</label><span>${esc(t.rejectReason)}</span></div>`:''}
+      </div>
+      <div class="btn-row" style="margin-top:12px;flex-wrap:wrap;gap:6px">
+        ${apr?`<button class="btn btn-sm btn-green" onclick="approveTrial('${t.id}')">✓ Setujui</button><button class="btn btn-sm btn-red" onclick="rejectTrial('${t.id}')">✕ Tolak</button>`:''}
+        ${t.status==='pending'&&!canApproveTrial()?`<span class="muted" style="font-size:11px">Menunggu approval Sales Manager</span>`:''}
+        ${start?`<button class="btn btn-sm btn-y" onclick="openTrialProcess('${t.id}')">🚀 Mulai / Support</button>`:''}
+        ${fin?`<button class="btn btn-sm btn-green" onclick="finishTrial('${t.id}')">✓ Selesai</button>`:''}
+        <button class="btn btn-sm" onclick="const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none'">Riwayat</button>
+        <div style="display:none;width:100%;margin-top:8px;border-top:1px solid var(--b1);padding-top:8px">${hist||'<span class="muted">—</span>'}</div>
+        ${(currentUser&&currentUser.role==='Service Manager')?`<button class="btn btn-sm btn-red" onclick="deleteTrial('${t.id}')">Hapus</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${tab('all','Semua')}${tab('pending','Menunggu')}${tab('approved','Disetujui')}${tab('running','Berjalan')}${tab('done','Selesai')}${tab('rejected','Ditolak')}</div>
+    <button class="btn btn-sm" onclick="manualRefresh()">🔄 Refresh</button>
+  </div>
+  ${c.pending&&canApproveTrial()?`<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:600">⏳ ${c.pending} pengajuan menunggu persetujuan Anda.</div>`:''}
+  ${c.approved&&canProcessTrial()?`<div style="background:rgba(90,180,255,.1);border:1px solid rgba(90,180,255,.3);color:#5ab4ff;border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:600">📦 ${c.approved} trial disetujui — siap diproses tim Service Center.</div>`:''}
+  <div class="visit-grid">${cards||'<div class="empty-row" style="grid-column:span 2;text-align:center;color:var(--t3);padding:40px">Belum ada pengajuan trial unit.</div>'}</div>`;
+}
+
+async function approveTrial(id){
+  const t=findTrial(id); if(!t) return;
+  if(!canApproveTrial()){ toast('Hanya Sales Manager yang bisa menyetujui','err'); return; }
+  const note=prompt('Catatan persetujuan (opsional):','')||'';
+  const now=Date.now();
+  t.status='approved'; t.approvedBy=(currentUser&&currentUser.name)||'Manager'; t.approvedAt=now; t.approvalNote=note; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Disetujui',by:t.approvedBy,note});
+  saveData(DB); renderView('trials'); toast('Pengajuan '+id+' disetujui','ok');
+  const extra=`<tr><td style="padding:5px 12px;color:#888;font-size:13px">Disetujui oleh</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(t.approvedBy)}</td></tr>`;
+  const sc=getSettings().scEmails;
+  if(sc) sendTrialEmail(sc, `[Trial Unit] DISETUJUI ${id} — silakan diproses`, trialEmailHtml('Trial Unit Disetujui', `Pengajuan <b>${esc(id)}</b> telah <b>disetujui</b> oleh ${esc(t.approvedBy)}. Tim Service Center dapat mulai menyiapkan & men-support trial unit ini.`, t, extra));
+  if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${id} disetujui`, trialEmailHtml('Pengajuan Trial Disetujui', `Halo ${esc(t.pic)}, kabar baik! Pengajuan trial unit Anda (<b>${esc(id)}</b>) telah disetujui. Tim Service Center kami akan menindaklanjuti.`, t, extra));
+}
+async function rejectTrial(id){
+  const t=findTrial(id); if(!t) return;
+  if(!canApproveTrial()){ toast('Hanya Sales Manager yang bisa menolak','err'); return; }
+  const reason=prompt('Alasan penolakan:'); if(reason===null) return;
+  const now=Date.now();
+  t.status='rejected'; t.rejectReason=reason; t.rejectedBy=(currentUser&&currentUser.name)||'Manager'; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Ditolak',by:t.rejectedBy,note:reason});
+  saveData(DB); renderView('trials'); toast('Pengajuan '+id+' ditolak');
+  if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${id} ditolak`, trialEmailHtml('Pengajuan Trial Ditolak', `Mohon maaf, pengajuan trial unit Anda (<b>${esc(id)}</b>) belum dapat disetujui saat ini.`, t, `<tr><td style="padding:5px 12px;color:#888;font-size:13px">Alasan</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(reason)}</td></tr>`));
+}
+function openTrialProcess(id){
+  const t=findTrial(id); if(!t) return;
+  document.getElementById('tp-id').value=id;
+  document.getElementById('tp-trial-label').textContent=t.id+' · '+t.company;
+  document.getElementById('tp-note').value='';
+  document.getElementById('tp-deliver').value=t.startDate||new Date().toISOString().slice(0,10);
+  populateTechSelect('tp-tech', t.assignedTech||'');
+  openModal('modal-trial-process');
+}
+function saveTrialProcess(){
+  const id=document.getElementById('tp-id').value; const t=findTrial(id); if(!t) return;
+  const tech=document.getElementById('tp-tech').value;
+  const deliver=document.getElementById('tp-deliver').value;
+  const note=document.getElementById('tp-note').value.trim();
+  const now=Date.now();
+  t.status='running'; t.assignedTech=tech; t.deliverDate=deliver; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Trial dimulai (di-support Service Center)',by:(currentUser&&currentUser.name)||'SC',note:[tech?('Teknisi: '+tech):'',deliver?('Kirim/mulai: '+deliver):'',note].filter(Boolean).join(' · ')});
+  saveData(DB); closeModal('modal-trial-process'); renderView('trials'); toast('Trial '+id+' dimulai','ok');
+  if(t.email) sendTrialEmail(t.email, `[Trial Unit] Trial ${id} dimulai`, trialEmailHtml('Trial Unit Dimulai', `Halo ${esc(t.pic)}, unit trial Anda (<b>${esc(id)}</b>) sedang disiapkan / di-support oleh tim Service Center kami.`, t));
+}
+function finishTrial(id){
+  const t=findTrial(id); if(!t) return;
+  const note=prompt('Catatan penutup (mis. unit dikembalikan / lanjut pembelian):',''); if(note===null) return;
+  const now=Date.now();
+  t.status='done'; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Trial selesai',by:(currentUser&&currentUser.name)||'SC',note});
+  saveData(DB); renderView('trials'); toast('Trial '+id+' ditandai selesai','ok');
+}
+function deleteTrial(id){
+  if(!confirm('Hapus pengajuan '+id+'?')) return;
+  DB.trials=(DB.trials||[]).filter(t=>t.id!==id); saveData(DB); renderView('trials'); toast('Pengajuan dihapus');
+}
+function updateTrialBadge(){
+  const el=document.getElementById('trial-badge'); if(!el) return;
+  const r=(currentUser&&currentUser.role)||''; let n=0;
+  if(['Sales Manager','Service Manager'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='pending').length;
+  if(['Service Manager','Technician'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='approved').length;
+  if(n>0){ el.textContent=n; el.style.display='inline-block'; } else { el.style.display='none'; }
+}
+function renderTrialResult(q,res){
+  const t=(DB.trials||[]).find(x=>x.id===q);
+  if(!t){ res.innerHTML=`<div class="no-result"><div class="icon">🔍</div><h3>Pengajuan Tidak Ditemukan</h3><p>Tidak ada pengajuan trial dengan nomor <strong>${esc(q)}</strong>.</p></div>`; return; }
+  const hist=(t.history||[]).slice().reverse().map((h,i)=>`<div class="tl-item"><div class="tl-dot-col"><div class="tl-dot" style="${i===0?'background:var(--green)':''}"></div><div class="tl-vline"></div></div><div class="tl-text"><div class="tl-action">${esc(h.action)}</div><div class="tl-time">${fmtDate(h.ts)}</div>${h.note?`<div class="tl-note">${esc(h.note)}</div>`:''}</div></div>`).join('');
+  res.innerHTML=`<div class="ticket-result"><div class="tc-header"><div><div class="tc-id">${esc(t.id)}</div><div class="tc-machine">${esc(t.machineType)}</div><div class="tc-customer">👤 ${esc(t.company)} · ${esc(t.pic)}</div></div><div class="tc-status-badge">${trialBadge(t.status)}</div></div><div class="tc-details"><div class="tc-grid"><div class="tc-field"><label>Sales Pengaju</label><span>${esc(t.salesName)}</span></div><div class="tc-field"><label>Sales Manager</label><span>${esc(t.managerName)||'—'}</span></div><div class="tc-field"><label>Tgl Mulai Diminta</label><span>${t.startDate?fmtDateOnly(t.startDate):'—'}</span></div><div class="tc-field"><label>Diajukan</label><span>${fmtDate(t.createdAt)}</span></div></div><div class="timeline"><div class="tl-title">Riwayat Pengajuan</div>${hist}</div></div></div>`;
+}
+
+// ── Settings card ──
+function trialSettingsCard(){
+  const s=getSettings();
+  const mgrs=getSalesManagers().map(m=>`${m.name} <${m.email}>`).join('\n');
+  const sc=s.scEmails||'';
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><h3>🧪 Notifikasi Trial Unit</h3></div>
+    <div class="card-body" style="padding:16px">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Atur penerima email otomatis untuk pengajuan trial unit. Email dikirim via server email Kalingga yang sudah ada (tanpa biaya tambahan).</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Sales Manager (penyetuju) — satu per baris: <span style="text-transform:none;font-weight:400">Nama &lt;email@domain&gt;</span></div>
+        <textarea id="set-managers" placeholder="Budi Santoso <budi@kalingga.co.id>" style="width:100%;min-height:72px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--mono);font-size:12px;padding:9px 12px;outline:none">${esc(mgrs)}</textarea>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Nama-nama ini muncul di dropdown form pengajuan; emailnya menerima notifikasi saat ada pengajuan baru.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Email Tim Service Center (pisahkan dengan koma)</div>
+        <input type="text" id="set-sc" placeholder="servicecenter@kalingga.co.id, teknisi@kalingga.co.id" value="${esc(sc)}" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Menerima notifikasi saat pengajuan masuk & saat disetujui (siap diproses).</div>
+      </div>
+      <button class="btn btn-y btn-sm" onclick="saveTrialSettings()">💾 Simpan Pengaturan Notifikasi</button>
+    </div>
+  </div>`;
+}
+function saveTrialSettings(){
+  const raw=(document.getElementById('set-managers')||{}).value||'';
+  const managers=raw.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
+    const em=(l.match(/[^\s<>()]+@[^\s<>()]+\.[^\s<>()]+/)||[])[0]||'';
+    let name=l.replace(em,'').replace(/[<>()]/g,'').trim(); if(!name) name=em;
+    return {name, email:em};
+  }).filter(m=>m.email);
+  const sc=(document.getElementById('set-sc')||{}).value||'';
+  const s=getSettings(); s.salesManagers=managers; s.scEmails=sc;
+  saveData(DB); renderView('settings'); toast('Pengaturan notifikasi disimpan','ok');
+}
+
 // ─── HIDDEN STAFF ACCESS ───
 // Customer tidak melihat tombol login. Staff hanya bisa akses via:
 //   URL hash: ...html#staff   atau   ...html#login   atau   ...html#admin
@@ -2018,7 +2340,7 @@ async function manualRefresh() {
     if (adminActive && typeof renderView === 'function') {
       const titleEl = document.getElementById('view-title');
       const t = (titleEl ? titleEl.textContent : 'dashboard').toLowerCase().replace(/\s/g,'-');
-      renderView(t === 'site-visits' ? 'site-visits' : t === 'tickets' ? 'tickets' : t === 'technicians' ? 'technicians' : t === 'settings' ? 'settings' : 'dashboard');
+      renderView(t === 'site-visits' ? 'site-visits' : t === 'tickets' ? 'tickets' : t === 'technicians' ? 'technicians' : t === 'trial-unit' ? 'trials' : t === 'settings' ? 'settings' : 'dashboard');
     }
   } else {
     toast('Cloud not configured or offline. Using local data.', 'err');
