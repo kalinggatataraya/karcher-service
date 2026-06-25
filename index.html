@@ -594,6 +594,23 @@ textarea { resize: vertical; min-height: 80px; }
 </div>
 
 <!-- ══════════════════════════════════
+     TRIAL APPROVAL PAGE (public, no login)
+══════════════════════════════════ -->
+<div class="page" id="pg-approve">
+  <div class="cust-hero">
+    <div class="k-logo"><div class="box">KÄRCHER</div><div class="sub">Trial Unit<br>Persetujuan</div></div>
+    <div class="sep"></div>
+    <div style="font-size:12px;color:var(--t3)">Persetujuan Pengajuan Trial Unit</div>
+  </div>
+  <div class="cust-body">
+    <div class="cust-title">Tinjau <span>Pengajuan</span> Trial Unit</div>
+    <div class="cust-sub">Periksa detail pengajuan, lalu setujui atau tolak. Tidak perlu login.</div>
+    <div id="approve-body" style="margin-top:18px"></div>
+    <div class="login-back" style="margin-top:24px" onclick="goCustomer()">← Ke Customer Portal</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
      ADMIN PANEL
 ══════════════════════════════════ -->
 <div class="page" id="pg-admin">
@@ -889,7 +906,6 @@ function getUsers() {
   // Default credentials
   return [
     { username: 'admin',   password: 'karcher2025', role: 'Service Manager',  name: 'Admin' },
-    { username: 'salesmgr', password: 'sales2025',  role: 'Sales Manager',    name: 'Sales Manager' },
     { username: 'teknisi1', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 1' },
     { username: 'teknisi2', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 2' },
   ];
@@ -2099,6 +2115,7 @@ function canApproveTrial(){ const r=(currentUser&&currentUser.role)||''; return 
 function canProcessTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Service Manager','Technician'].includes(r); }
 function getSettings(){ if(!DB.settings||typeof DB.settings!=='object') DB.settings={}; return DB.settings; }
 function getSalesManagers(){ const a=getSettings().salesManagers; return Array.isArray(a)?a:[]; }
+function managerEmails(m){ if(!m) return []; if(Array.isArray(m.emails)&&m.emails.length) return m.emails.filter(Boolean); if(m.email) return [m.email]; return []; }
 function parseEmails(str){ return String(str||'').split(/[,;\n\s]+/).map(e=>e.trim()).filter(e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)); }
 function findTrial(id){ return (DB.trials||[]).find(t=>t.id===id); }
 
@@ -2115,7 +2132,7 @@ async function sendTrialEmail(to, subject, html){
     return res.ok;
   }catch(e){ console.error('[Trial email] failed:', e); return false; }
 }
-function trialEmailHtml(title, intro, tr, extraRows){
+function trialEmailHtml(title, intro, tr, extraRows, ctaHtml){
   const row=(k,v)=> (v||v===0)?`<tr><td style="padding:5px 12px;color:#888;font-size:13px;white-space:nowrap">${k}</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(v)}</td></tr>`:'';
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;border:1px solid #eee;border-radius:10px;overflow:hidden">
     <div style="background:#1a1a1a;color:#FFD700;padding:16px 20px;font-weight:700;font-size:16px">KÄRCHER · Trial Unit</div>
@@ -2125,6 +2142,7 @@ function trialEmailHtml(title, intro, tr, extraRows){
       <table style="width:100%;border-collapse:collapse;background:#fafafa;border-radius:8px">
         ${row('No. Pengajuan', tr.id)}${row('Customer', tr.company)}${row('PIC', tr.pic)}${row('Telepon', tr.phone)}${row('Email', tr.email)}${row('Mesin Diminati', tr.machineType)}${row('Jumlah Unit', tr.qty)}${row('Lokasi Trial', tr.address)}${row('Tgl Mulai', tr.startDate)}${row('Durasi (hari)', tr.duration)}${row('Sales Pengaju', tr.salesName)}${row('Sales Manager', tr.managerName)}${row('Catatan', tr.notes)}${extraRows||''}
       </table>
+      ${ctaHtml||''}
       <p style="color:#999;font-size:12px;margin-top:16px">Email otomatis dari Sistem Service Center Kärcher · PT Kalingga Tataraya.</p>
     </div></div>`;
 }
@@ -2161,6 +2179,7 @@ async function submitTrial(){
   const y=new Date().getFullYear();
   const id=`TRL-${y}-`+String(base.trials.filter(t=>String(t.id).includes('TRL-'+y)).length+1).padStart(3,'0');
   const tr={ id, company, pic, phone, email, machineType:machine, qty:g('tr-qty')||'1', address:g('tr-address'), startDate:g('tr-start'), duration:g('tr-duration')||'', salesName, managerName:manager?manager.name:'', managerEmail:manager?manager.email:'', notes:g('tr-notes'), status:'pending', createdAt:now, updatedAt:now, history:[{ts:now,action:'Pengajuan dibuat',by:salesName,note:'Diajukan via form publik'}] };
+  tr.token = (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
   base.trials.push(tr);
   DB=base; saveData(DB);
 
@@ -2170,7 +2189,10 @@ async function submitTrial(){
   if(res) res.innerHTML=`<div class="ticket-result" style="text-align:center;padding:30px"><div style="font-size:42px">✅</div><h3 style="margin:8px 0;color:var(--green)">Pengajuan Trial Terkirim</h3><p style="color:var(--t2);line-height:1.6">Nomor pengajuan Anda: <strong style="color:var(--y);font-family:var(--mono)">${id}</strong><br>Simpan nomor ini untuk cek status. <b>Sales Manager</b> akan meninjau pengajuan, lalu tim Service Center menindaklanjuti.</p></div>`;
 
   const sc=getSettings().scEmails;
-  if(manager&&manager.email) sendTrialEmail(manager.email, `[Trial Unit] Pengajuan baru ${id} — butuh approval Anda`, trialEmailHtml('Pengajuan Trial Unit Baru', `Halo ${esc(manager.name)}, ada pengajuan trial unit baru dari <b>${esc(salesName)}</b> yang menunggu persetujuan Anda. Buka portal staff untuk menyetujui / menolak.`, tr));
+  const _apUrl = location.origin + location.pathname + '#trial=' + encodeURIComponent(id) + '&t=' + encodeURIComponent(tr.token);
+  const _cta = `<div style="margin:16px 0"><a href="${_apUrl}" style="display:inline-block;background:#FFD700;color:#1a1a1a;font-weight:700;text-decoration:none;padding:13px 24px;border-radius:8px;font-size:15px">Tinjau &amp; Setujui / Tolak →</a></div><p style="color:#777;font-size:12px;word-break:break-all">Atau buka tautan ini: <a href="${_apUrl}">${_apUrl}</a></p>`;
+  const _mgrEmails = manager ? managerEmails(manager) : [];
+  if(_mgrEmails.length){ tr.managerEmails=_mgrEmails; sendTrialEmail(_mgrEmails, `[Trial Unit] Pengajuan baru ${id} — butuh persetujuan`, trialEmailHtml('Pengajuan Trial Unit Baru', `Halo ${esc(manager.name)}, ada pengajuan trial unit baru dari <b>${esc(salesName)}</b>. Anda dapat <b>menyetujui atau menolak langsung dari email ini</b> — tanpa perlu login.${_mgrEmails.length>1?' Email ini dikirim ke beberapa penyetuju; <b>persetujuan pertama</b> yang masuk dianggap final.':''} Klik tombol di bawah.`, tr, '', _cta)); }
   if(sc) sendTrialEmail(sc, `[Trial Unit] Pengajuan baru ${id} (menunggu approval)`, trialEmailHtml('Pengajuan Trial Unit Baru (FYI)', `Ada pengajuan trial unit baru. Tim Service Center dapat memproses setelah disetujui Sales Manager.`, tr));
   if(btn){ btn.disabled=false; btn.textContent='Kirim Pengajuan'; }
 }
@@ -2225,26 +2247,21 @@ function viewTrials(){
 
 async function approveTrial(id){
   const t=findTrial(id); if(!t) return;
-  if(!canApproveTrial()){ toast('Hanya Sales Manager yang bisa menyetujui','err'); return; }
+  if(!canApproveTrial()){ toast('Anda tidak punya hak menyetujui','err'); return; }
+  if(t.status!=='pending'){ toast('Pengajuan sudah diproses','err'); return; }
   const note=prompt('Catatan persetujuan (opsional):','')||'';
-  const now=Date.now();
-  t.status='approved'; t.approvedBy=(currentUser&&currentUser.name)||'Manager'; t.approvedAt=now; t.approvalNote=note; t.updatedAt=now;
-  (t.history=t.history||[]).push({ts:now,action:'Disetujui',by:t.approvedBy,note});
+  applyApproval(t,(currentUser&&currentUser.name)||'Manager',note);
   saveData(DB); renderView('trials'); toast('Pengajuan '+id+' disetujui','ok');
-  const extra=`<tr><td style="padding:5px 12px;color:#888;font-size:13px">Disetujui oleh</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(t.approvedBy)}</td></tr>`;
-  const sc=getSettings().scEmails;
-  if(sc) sendTrialEmail(sc, `[Trial Unit] DISETUJUI ${id} — silakan diproses`, trialEmailHtml('Trial Unit Disetujui', `Pengajuan <b>${esc(id)}</b> telah <b>disetujui</b> oleh ${esc(t.approvedBy)}. Tim Service Center dapat mulai menyiapkan & men-support trial unit ini.`, t, extra));
-  if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${id} disetujui`, trialEmailHtml('Pengajuan Trial Disetujui', `Halo ${esc(t.pic)}, kabar baik! Pengajuan trial unit Anda (<b>${esc(id)}</b>) telah disetujui. Tim Service Center kami akan menindaklanjuti.`, t, extra));
+  sendApprovalEmails(t,'approve');
 }
 async function rejectTrial(id){
   const t=findTrial(id); if(!t) return;
-  if(!canApproveTrial()){ toast('Hanya Sales Manager yang bisa menolak','err'); return; }
+  if(!canApproveTrial()){ toast('Anda tidak punya hak menolak','err'); return; }
+  if(t.status!=='pending'){ toast('Pengajuan sudah diproses','err'); return; }
   const reason=prompt('Alasan penolakan:'); if(reason===null) return;
-  const now=Date.now();
-  t.status='rejected'; t.rejectReason=reason; t.rejectedBy=(currentUser&&currentUser.name)||'Manager'; t.updatedAt=now;
-  (t.history=t.history||[]).push({ts:now,action:'Ditolak',by:t.rejectedBy,note:reason});
+  applyRejection(t,(currentUser&&currentUser.name)||'Manager',reason);
   saveData(DB); renderView('trials'); toast('Pengajuan '+id+' ditolak');
-  if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${id} ditolak`, trialEmailHtml('Pengajuan Trial Ditolak', `Mohon maaf, pengajuan trial unit Anda (<b>${esc(id)}</b>) belum dapat disetujui saat ini.`, t, `<tr><td style="padding:5px 12px;color:#888;font-size:13px">Alasan</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(reason)}</td></tr>`));
+  sendApprovalEmails(t,'reject');
 }
 function openTrialProcess(id){
   const t=findTrial(id); if(!t) return;
@@ -2292,19 +2309,114 @@ function renderTrialResult(q,res){
   res.innerHTML=`<div class="ticket-result"><div class="tc-header"><div><div class="tc-id">${esc(t.id)}</div><div class="tc-machine">${esc(t.machineType)}</div><div class="tc-customer">👤 ${esc(t.company)} · ${esc(t.pic)}</div></div><div class="tc-status-badge">${trialBadge(t.status)}</div></div><div class="tc-details"><div class="tc-grid"><div class="tc-field"><label>Sales Pengaju</label><span>${esc(t.salesName)}</span></div><div class="tc-field"><label>Sales Manager</label><span>${esc(t.managerName)||'—'}</span></div><div class="tc-field"><label>Tgl Mulai Diminta</label><span>${t.startDate?fmtDateOnly(t.startDate):'—'}</span></div><div class="tc-field"><label>Diajukan</label><span>${fmtDate(t.createdAt)}</span></div></div><div class="timeline"><div class="tl-title">Riwayat Pengajuan</div>${hist}</div></div></div>`;
 }
 
+// ── Shared approval core (used by BOTH staff portal and email link) ──
+function applyApproval(t, actor, note){
+  const now=Date.now();
+  t.status='approved'; t.approvedBy=actor||'Sales Manager'; t.approvedAt=now; t.approvalNote=note||''; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Disetujui',by:t.approvedBy,note:note||''});
+}
+function applyRejection(t, actor, reason){
+  const now=Date.now();
+  t.status='rejected'; t.rejectReason=reason||''; t.rejectedBy=actor||'Sales Manager'; t.updatedAt=now;
+  (t.history=t.history||[]).push({ts:now,action:'Ditolak',by:t.rejectedBy,note:reason||''});
+}
+function sendApprovalEmails(t, action){
+  const sc=getSettings().scEmails;
+  if(action==='approve'){
+    const extra=`<tr><td style="padding:5px 12px;color:#888;font-size:13px">Disetujui oleh</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(t.approvedBy)}</td></tr>`;
+    if(sc) sendTrialEmail(sc, `[Trial Unit] DISETUJUI ${t.id} — silakan diproses`, trialEmailHtml('Trial Unit Disetujui', `Pengajuan <b>${esc(t.id)}</b> telah <b>disetujui</b> oleh ${esc(t.approvedBy)}. Tim Service Center dapat mulai menyiapkan & men-support trial unit ini.`, t, extra));
+    if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${t.id} disetujui`, trialEmailHtml('Pengajuan Trial Disetujui', `Halo ${esc(t.pic)}, kabar baik! Pengajuan trial unit Anda (<b>${esc(t.id)}</b>) telah disetujui. Tim Service Center kami akan menindaklanjuti.`, t, extra));
+  } else {
+    if(t.email) sendTrialEmail(t.email, `[Trial Unit] Pengajuan ${t.id} ditolak`, trialEmailHtml('Pengajuan Trial Ditolak', `Mohon maaf, pengajuan trial unit Anda (<b>${esc(t.id)}</b>) belum dapat disetujui saat ini.`, t, `<tr><td style="padding:5px 12px;color:#888;font-size:13px">Alasan</td><td style="padding:5px 12px;font-size:13px;font-weight:600;color:#111">${esc(t.rejectReason)}</td></tr>`));
+  }
+}
+
+// ── Email approval deep-link: Sales Manager approves WITHOUT an account ──
+function parseTrialHash(){
+  const h=location.hash||'';
+  const m=h.match(/^#trial=([^&]+)(?:&t=([^&]+))?/);
+  if(!m) return null;
+  return { id:decodeURIComponent(m[1]), token:m[2]?decodeURIComponent(m[2]):'' };
+}
+function openApprovalPage(id, token){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const pg=document.getElementById('pg-approve'); if(pg) pg.classList.add('active');
+  const body=document.getElementById('approve-body');
+  if(body) body.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3)">⏳ Memuat pengajuan…</div>';
+  loadApproval(id, token);
+}
+async function loadApproval(id, token){
+  const body=document.getElementById('approve-body'); if(!body) return;
+  let data=DB;
+  if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) data=normalizeDB(f); }
+  const t=(data.trials||[]).find(x=>x.id===id);
+  if(!t){ body.innerHTML=errBox('Pengajuan tidak ditemukan. Periksa kembali tautan dari email.'); return; }
+  if(!t.token || t.token!==token){ body.innerHTML=errBox('Tautan tidak valid atau sudah kedaluwarsa.'); return; }
+  DB=data; try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
+  if(t.status!=='pending'){ body.innerHTML=doneBox(t,false); return; }
+  body.innerHTML=approvalForm(t, token);
+}
+function approvalForm(t, token){
+  return `<div class="ticket-result">
+    <div class="tc-header"><div><div class="tc-id">${esc(t.id)}</div><div class="tc-machine">${esc(t.machineType)}</div><div class="tc-customer">👤 ${esc(t.company)} · ${esc(t.pic)}</div></div><div class="tc-status-badge">${trialBadge(t.status)}</div></div>
+    <div class="tc-details">
+      <div class="tc-grid">
+        <div class="tc-field"><label>Sales Pengaju</label><span>${esc(t.salesName)}</span></div>
+        <div class="tc-field"><label>Telepon</label><span>${esc(t.phone)}</span></div>
+        <div class="tc-field"><label>Jumlah</label><span>${esc(t.qty)||'1'} unit</span></div>
+        <div class="tc-field"><label>Tgl Mulai</label><span>${t.startDate?fmtDateOnly(t.startDate):'—'}${t.duration?` (${esc(t.duration)} hari)`:''}</span></div>
+        <div class="tc-field" style="grid-column:span 2"><label>Lokasi</label><span>${esc(t.address)||'—'}</span></div>
+        ${t.notes?`<div class="tc-field" style="grid-column:span 2"><label>Catatan</label><span>${esc(t.notes)}</span></div>`:''}
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Catatan (opsional untuk setujui · wajib untuk tolak)</div>
+        <textarea id="ap-note" placeholder="Catatan / alasan…" style="width:100%;min-height:60px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"></textarea>
+      </div>
+      <div id="ap-actions" style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-y" style="flex:1" onclick="decideApproval('${esc(t.id)}','${esc(token)}','approve')">✓ Setujui</button>
+        <button class="btn btn-red" style="flex:1" onclick="decideApproval('${esc(t.id)}','${esc(token)}','reject')">✕ Tolak</button>
+      </div>
+    </div></div>`;
+}
+async function decideApproval(id, token, action){
+  const noteEl=document.getElementById('ap-note'); const note=noteEl?noteEl.value:'';
+  if(action==='reject' && !note.trim()){ toast('Mohon isi alasan penolakan','err'); return; }
+  const acts=document.getElementById('ap-actions'); if(acts) acts.innerHTML='<div style="color:var(--t3);padding:8px">⏳ Memproses…</div>';
+  let data=DB;
+  if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) data=normalizeDB(f); }
+  const t=(data.trials||[]).find(x=>x.id===id);
+  const body=document.getElementById('approve-body');
+  if(!t || t.token!==token){ if(body) body.innerHTML=errBox('Tautan tidak valid.'); return; }
+  if(t.status!=='pending'){ if(body) body.innerHTML=doneBox(t,false); return; }
+  const actor=t.managerName||'Sales Manager';
+  if(action==='approve') applyApproval(t, actor, note); else applyRejection(t, actor, note);
+  DB=data;
+  if(cloudIsConfigured()){ const ok=await cloudSave(data); if(!ok){ if(body) body.innerHTML=errBox('Gagal menyimpan ke server. Coba lagi.'); return; } }
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
+  sendApprovalEmails(t, action);
+  if(body) body.innerHTML=doneBox(t, true);
+}
+function doneBox(t, justActed){
+  const map={approved:['✅','Pengajuan Disetujui','Tim Service Center sudah diberi tahu dan akan menindaklanjuti.'],rejected:['🚫','Pengajuan Ditolak','Sales pengaju telah diberi tahu.'],running:['🚚','Trial Sedang Berjalan','Pengajuan ini sudah diproses tim Service Center.'],done:['🏁','Trial Selesai','Pengajuan ini sudah selesai.'],pending:['⏳','Menunggu Persetujuan','']};
+  const m=map[t.status]||map.pending;
+  return `<div class="ticket-result" style="text-align:center;padding:34px"><div style="font-size:46px">${m[0]}</div><h3 style="margin:10px 0 4px">${m[1]}</h3><div style="margin:6px 0">${trialBadge(t.status)}</div><p style="color:var(--t2);line-height:1.6;margin-top:8px">${justActed?'Terima kasih. ':''}${m[2]}<br><span style="font-family:var(--mono);color:var(--y)">${esc(t.id)}</span> · ${esc(t.company)}</p></div>`;
+}
+function errBox(msg){ return `<div class="no-result"><div class="icon">⚠️</div><h3>Tidak Dapat Diproses</h3><p>${esc(msg)}</p></div>`; }
+window.addEventListener('hashchange', ()=>{ const a=parseTrialHash(); if(a) openApprovalPage(a.id, a.token); });
+
 // ── Settings card ──
 function trialSettingsCard(){
   const s=getSettings();
-  const mgrs=getSalesManagers().map(m=>`${m.name} <${m.email}>`).join('\n');
+  const mgrs=getSalesManagers().map(m=>`${m.name} <${managerEmails(m).join(', ')}>`).join('\n');
   const sc=s.scEmails||'';
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-hd"><h3>🧪 Notifikasi Trial Unit</h3></div>
     <div class="card-body" style="padding:16px">
       <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Atur penerima email otomatis untuk pengajuan trial unit. Email dikirim via server email Kalingga yang sudah ada (tanpa biaya tambahan).</div>
       <div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Sales Manager (penyetuju) — satu per baris: <span style="text-transform:none;font-weight:400">Nama &lt;email@domain&gt;</span></div>
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Sales Manager (penyetuju) — satu per baris: <span style="text-transform:none;font-weight:400">Nama &lt;email1, email2&gt;</span></div>
         <textarea id="set-managers" placeholder="Budi Santoso <budi@kalingga.co.id>" style="width:100%;min-height:72px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--mono);font-size:12px;padding:9px 12px;outline:none">${esc(mgrs)}</textarea>
-        <div style="font-size:11px;color:var(--t3);margin-top:4px">Nama-nama ini muncul di dropdown form pengajuan; emailnya menerima notifikasi saat ada pengajuan baru.</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Boleh isi lebih dari satu email per manager (pisahkan koma) — link approval dikirim ke semuanya, dan persetujuan PERTAMA yang masuk dianggap final.</div>
       </div>
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Email Tim Service Center (pisahkan dengan koma)</div>
@@ -2318,10 +2430,11 @@ function trialSettingsCard(){
 function saveTrialSettings(){
   const raw=(document.getElementById('set-managers')||{}).value||'';
   const managers=raw.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
-    const em=(l.match(/[^\s<>()]+@[^\s<>()]+\.[^\s<>()]+/)||[])[0]||'';
-    let name=l.replace(em,'').replace(/[<>()]/g,'').trim(); if(!name) name=em;
-    return {name, email:em};
-  }).filter(m=>m.email);
+    const emails=(l.match(/[^\s<>(),;]+@[^\s<>(),;]+\.[^\s<>(),;]+/g)||[]);
+    let name=l; emails.forEach(e=>{ name=name.replace(e,''); });
+    name=name.replace(/[<>(),;]/g,' ').replace(/\s+/g,' ').trim(); if(!name) name=emails[0]||'';
+    return {name, emails};
+  }).filter(m=>m.emails.length);
   const sc=(document.getElementById('set-sc')||{}).value||'';
   const s=getSettings(); s.salesManagers=managers; s.scEmails=sc;
   saveData(DB); renderView('settings'); toast('Pengaturan notifikasi disimpan','ok');
@@ -2349,6 +2462,10 @@ async function manualRefresh() {
 
 // ─── INIT ───
 window.addEventListener('DOMContentLoaded', async () => {
+  // Trial approval deep-link (Sales Manager approves via email, no login)
+  const _ap = parseTrialHash();
+  if (_ap) { openApprovalPage(_ap.id, _ap.token); return; }
+
   // Set today's date for visit form
   const todayInput = document.getElementById('v-date');
   if (todayInput) todayInput.value = new Date().toISOString().slice(0,10);
