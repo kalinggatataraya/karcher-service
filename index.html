@@ -511,6 +511,7 @@ textarea { resize: vertical; min-height: 80px; }
       <span>📞 Need help?</span>
       <a href="tel:+62211234567" style="color:var(--y);text-decoration:none;font-weight:600">021-1234567</a>
     </div>
+    <button class="btn btn-sm" style="margin-left:12px" onclick="goLogin()">🔒 Login Staff</button>
   </div>
   <div class="cust-body">
     <div class="cust-title">Track Your <span>Service</span> Status</div>
@@ -523,15 +524,6 @@ textarea { resize: vertical; min-height: 80px; }
         <button class="btn-search" onclick="trackTicket()">Track Now</button>
       </div>
       <div style="font-size:12px;color:var(--t3);margin-top:10px">💡 Your ticket number was given when you dropped off your machine at our service center.</div>
-    </div>
-
-    <div class="trial-cta" style="margin-top:18px;background:linear-gradient(135deg,rgba(255,215,0,.08),rgba(255,159,64,.06));border:1px solid rgba(255,215,0,.25);border-radius:var(--r3);padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-      <div style="font-size:30px">🧪</div>
-      <div style="flex:1;min-width:200px">
-        <div style="font-family:var(--cond);font-size:17px;font-weight:700">Coba Dulu Sebelum Beli — Trial Unit Kärcher</div>
-        <div style="font-size:12px;color:var(--t2);margin-top:3px">Tim sales dapat mengajukan unit trial untuk customer. Pengajuan ditinjau & disetujui Sales Manager, lalu didukung tim Service Center. Sudah punya nomor TRL-…? Ketik di kolom di atas untuk cek status.</div>
-      </div>
-      <button class="btn btn-y" onclick="openTrialRequest()">+ Ajukan Trial Unit</button>
     </div>
 
     <div id="cust-result"></div>
@@ -590,6 +582,34 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
     </div>
     <div class="login-back" onclick="goCustomer()">← Kembali ke Customer Portal</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SALES TRIAL REQUEST PAGE (public, no login)  →  open via  #ajukan
+══════════════════════════════════ -->
+<div class="page" id="pg-trial-request">
+  <div class="cust-hero">
+    <div class="k-logo"><div class="box">KÄRCHER</div><div class="sub">Trial Unit<br>Pengajuan Sales</div></div>
+    <div class="sep"></div>
+    <div style="font-size:12px;color:var(--t3)">Khusus Tim Sales</div>
+  </div>
+  <div class="cust-body">
+    <div class="cust-title">Ajukan <span>Trial Unit</span> Kärcher</div>
+    <div class="cust-sub">Isi data pengajuan trial unit untuk customer Anda. Tidak perlu login. Pengajuan akan disetujui Sales Manager sebelum diproses tim Service Center.</div>
+    <div style="margin-top:20px;text-align:center">
+      <button class="btn btn-y" style="font-size:15px;padding:13px 28px" onclick="openTrialRequest()">📝 Buka Form Pengajuan</button>
+    </div>
+    <div id="tr-result" style="margin-top:18px"></div>
+    <div style="margin-top:30px;padding:18px 20px;background:var(--bg2);border:1px solid var(--b2);border-radius:var(--r3)">
+      <div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Cek Status Pengajuan</div>
+      <div class="search-row">
+        <input type="text" id="trk-trial" placeholder="TRL-2026-001" maxlength="20" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')trackTrialOnPage()"/>
+        <button class="btn-search" onclick="trackTrialOnPage()">Cek</button>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-top:8px">💡 Nomor TRL diberikan otomatis setelah Anda mengirim pengajuan.</div>
+    </div>
+    <div class="login-back" style="margin-top:24px" onclick="goCustomer()">← Ke Customer Portal</div>
   </div>
 </div>
 
@@ -2185,7 +2205,7 @@ async function submitTrial(){
 
   closeModal('modal-trial');
   toast('Pengajuan terkirim: '+id,'ok');
-  const res=document.getElementById('cust-result');
+  const res=document.getElementById('tr-result')||document.getElementById('cust-result');
   if(res) res.innerHTML=`<div class="ticket-result" style="text-align:center;padding:30px"><div style="font-size:42px">✅</div><h3 style="margin:8px 0;color:var(--green)">Pengajuan Trial Terkirim</h3><p style="color:var(--t2);line-height:1.6">Nomor pengajuan Anda: <strong style="color:var(--y);font-family:var(--mono)">${id}</strong><br>Simpan nomor ini untuk cek status. <b>Sales Manager</b> akan meninjau pengajuan, lalu tim Service Center menindaklanjuti.</p></div>`;
 
   const sc=getSettings().scEmails;
@@ -2402,7 +2422,22 @@ function doneBox(t, justActed){
   return `<div class="ticket-result" style="text-align:center;padding:34px"><div style="font-size:46px">${m[0]}</div><h3 style="margin:10px 0 4px">${m[1]}</h3><div style="margin:6px 0">${trialBadge(t.status)}</div><p style="color:var(--t2);line-height:1.6;margin-top:8px">${justActed?'Terima kasih. ':''}${m[2]}<br><span style="font-family:var(--mono);color:var(--y)">${esc(t.id)}</span> · ${esc(t.company)}</p></div>`;
 }
 function errBox(msg){ return `<div class="no-result"><div class="icon">⚠️</div><h3>Tidak Dapat Diproses</h3><p>${esc(msg)}</p></div>`; }
-window.addEventListener('hashchange', ()=>{ const a=parseTrialHash(); if(a) openApprovalPage(a.id, a.token); });
+function showTrialRequestPage(){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const tp=document.getElementById('pg-trial-request'); if(tp) tp.classList.add('active');
+}
+function trackTrialOnPage(){
+  const el=document.getElementById('trk-trial'); const q=el?el.value.trim().toUpperCase():'';
+  const res=document.getElementById('tr-result'); if(!res) return;
+  if(!q){ toast('Masukkan nomor TRL','err'); return; }
+  res.innerHTML='<div style="text-align:center;padding:20px;color:var(--t3)">⏳ Memuat…</div>';
+  (async()=>{ if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) DB=normalizeDB(f); } renderTrialResult(q,res); })();
+}
+window.addEventListener('hashchange', ()=>{
+  const a=parseTrialHash(); if(a){ openApprovalPage(a.id, a.token); return; }
+  const h=(location.hash||'').toLowerCase();
+  if(h==='#ajukan'||h==='#trial-request'||h==='#sales') showTrialRequestPage();
+});
 
 // ── Settings card ──
 function trialSettingsCard(){
@@ -2495,6 +2530,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     history.replaceState(null, '', location.pathname + location.search);
   }
+
+  if (hash === '#ajukan' || hash === '#trial-request' || hash === '#sales') showTrialRequestPage();
 
   // Initial cloud sync (silent — user already sees cached data immediately)
   if (cloudIsConfigured()) {
