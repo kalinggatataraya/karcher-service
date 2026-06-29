@@ -1224,7 +1224,7 @@ function defaultData() {
   };
 }
 
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; return d; }
 let DB = normalizeDB(loadData());
 
 // ═══════════════════════════════════════════════
@@ -2441,7 +2441,7 @@ async function syncPM(){
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'Gagal');
     if(!DB.pm) DB.pm={visits:{}};
-    DB.pm.entitlements=Array.isArray(data.entitlements)?data.entitlements:[];
+    DB.pm.entitlements=(Array.isArray(data.entitlements)?data.entitlements:[]).map(e=>({invoiceId:e.invoiceId, invoice:e.invoice, partner:e.partner, date:e.date, amount:e.amount}));
     DB.pm.detectedCategories=data.detectedCategories||[];
     DB.pm.lastSync=Date.now();
     saveData(DB); renderView('pm');
