@@ -645,7 +645,6 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="sb-section">Workshop</div>
     <button class="nav-item on" onclick="goView('dashboard',this)"><span class="ico">📊</span> Dashboard</button>
     <button class="nav-item" onclick="goView('tickets',this)"><span class="ico">🎫</span> Service Tickets</button>
-    <button class="nav-item" onclick="goView('workshop-schedule',this)"><span class="ico">🗓️</span> Workshop Schedule</button>
     <button class="nav-item" onclick="goView('new-ticket',this)"><span class="ico">➕</span> New Ticket</button>
 
     <div class="sb-section">Field</div>
@@ -654,6 +653,7 @@ textarea { resize: vertical; min-height: 80px; }
 
     <div class="sb-section">Sales</div>
     <button class="nav-item" onclick="goView('trials',this)"><span class="ico">🧪</span> Trial Unit <span id="trial-badge" class="trial-badge" style="display:none"></span></button>
+    <button class="nav-item" onclick="goView('pm',this)"><span class="ico">🛡️</span> Preventive Maint. <span id="pm-badge" class="trial-badge" style="display:none"></span></button>
 
     <div class="sb-section">Team</div>
     <button class="nav-item" onclick="goView('productivity',this)"><span class="ico">📈</span> Productivity</button>
@@ -740,12 +740,7 @@ textarea { resize: vertical; min-height: 80px; }
         </div>
       </div>
       <div class="f-row"><div class="f-label">Internal Notes</div><textarea id="f-notes" placeholder="Notes for technician (not visible to customer)…" style="min-height:60px"></textarea></div>
-      <div class="f-grid2">
-        <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(visible to customer)</span></div><input type="date" id="f-eta"/></div>
-        <div class="f-row"><div class="f-label">Workshop Schedule <span style="color:var(--t3);font-weight:400">(when tech works on this)</span></div>
-          <div style="display:flex;gap:6px"><input type="date" id="f-workshop-date" style="flex:1"/><input type="time" id="f-workshop-time" style="width:90px"/></div>
-        </div>
-      </div>
+      <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(visible to customer)</span></div><input type="date" id="f-eta"/></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-ticket')">Cancel</button>
@@ -907,6 +902,26 @@ textarea { resize: vertical; min-height: 80px; }
 </div>
 
 <style>.trial-badge{background:var(--red);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:9px;padding:0 5px;margin-left:4px;display:inline-block}</style>
+
+<!-- Catat PM Modal -->
+<div class="modal-bg" id="modal-pm">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hd"><h2>Catat Kunjungan PM</h2><button class="modal-close" onclick="closeModal('modal-pm')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="pm-invoice"/>
+      <div class="f-row"><div class="f-label">Entitlement</div><div id="pm-label" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Tanggal PM</div><input type="date" id="pm-date"/></div>
+        <div class="f-row"><div class="f-label">Oleh</div><select id="pm-by"><option value="">— Pilih —</option></select></div>
+      </div>
+      <div class="f-row"><div class="f-label">Catatan</div><textarea id="pm-note" placeholder="Hasil PM, kondisi unit…" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-pm')">Batal</button>
+      <button class="btn btn-y" onclick="savePM()">Simpan PM</button>
+    </div>
+  </div>
+</div>
 
 <div id="toasts"></div>
 
@@ -1072,6 +1087,7 @@ const CLOUD_API = 'https://api.jsonbin.io/v3/b';
 // ── Email notifications (reuse Sales Monitor's Supabase send-reminder function; Gmail SMTP, no extra cost) ──
 const EMAIL_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/send-reminder';
 const EMAIL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
+const PM_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-pm-eligible';
 const cloudIsConfigured = () => CLOUD.BIN_ID && CLOUD.API_KEY 
   && !CLOUD.BIN_ID.includes('PASTE') && !CLOUD.API_KEY.includes('PASTE');
 
@@ -1208,7 +1224,7 @@ function defaultData() {
   };
 }
 
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; return d; }
 let DB = normalizeDB(loadData());
 
 // ═══════════════════════════════════════════════
@@ -1339,7 +1355,7 @@ async function trackTicket() {
 // VIEWS
 // ═══════════════════════════════════════════════
 function renderView(view) {
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'workshop-schedule':'Workshop Schedule', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
   c.innerHTML = '';
@@ -1348,12 +1364,13 @@ function renderView(view) {
   else if (view==='new-ticket') { openNewTicket(); renderView('tickets'); return; }
   else if (view==='site-visits') c.innerHTML = viewSiteVisits();
   else if (view==='new-visit') { openNewVisit(); renderView('site-visits'); return; }
-  else if (view==='workshop-schedule') c.innerHTML = viewWorkshopSchedule();
   else if (view==='productivity') c.innerHTML = viewProductivity();
   else if (view==='technicians') c.innerHTML = viewTechnicians();
   else if (view==='trials') c.innerHTML = viewTrials();
+  else if (view==='pm') c.innerHTML = viewPM();
   else if (view==='settings') c.innerHTML = viewSettings();
   updateTrialBadge();
+  updatePMBadge();
 }
 
 // ─── DASHBOARD ───
@@ -1437,15 +1454,23 @@ function viewDashboard() {
 
 // ─── TICKETS ───
 let ticketFilter = 'all';
+let ticketSort = 'updated_desc';
 function viewTickets(filter) {
   if (filter) ticketFilter = filter;
   const filters = [{k:'all',l:'All'},{k:'received',l:'Received'},{k:'diagnosing',l:'Diagnosing'},{k:'repairing',l:'Repairing'},{k:'testing',l:'Testing'},{k:'done',l:'Ready'},{k:'delivered',l:'Delivered'}];
-  let tickets = [...DB.tickets].sort((a,b)=>b.updatedAt-a.updatedAt);
+  let tickets = [...DB.tickets];
   if (ticketFilter !== 'all') tickets = tickets.filter(t => t.status === ticketFilter);
+  if (ticketSort==='created_asc') tickets.sort((a,b)=>a.createdAt-b.createdAt);
+  else if (ticketSort==='created_desc') tickets.sort((a,b)=>b.createdAt-a.createdAt);
+  else tickets.sort((a,b)=>b.updatedAt-a.updatedAt);
+  const sortOpts=[['updated_desc','Terbaru diperbarui'],['created_desc','Terbaru dibuat'],['created_asc','Terlama → terbaru']];
+  const selStyle="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:6px 10px;outline:none;margin-right:8px";
   return `
   <div class="filter-row">
     ${filters.map(f=>`<div class="filter-chip ${ticketFilter===f.k?'on':''}" onclick="ticketFilter='${f.k}';renderView('tickets')">${f.l} ${f.k==='all'?'('+DB.tickets.length+')':''}</div>`).join('')}
     <div class="sep"></div>
+    <span style="font-size:12px;color:var(--t3);margin-right:6px">Urutkan:</span>
+    <select onchange="ticketSort=this.value;renderView('tickets')" style="${selStyle}">${sortOpts.map(o=>`<option value="${o[0]}" ${ticketSort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
   </div>
   <div class="card">
@@ -1471,265 +1496,122 @@ function viewTickets(filter) {
   </div>`;
 }
 
-// ─── SITE VISITS ───
-function viewSiteVisits() {
-  const upcoming = DB.visits.filter(v=>v.status==='scheduled').sort((a,b)=>a.date.localeCompare(b.date));
-  const completed = DB.visits.filter(v=>v.status==='completed');
-  const typeIcon = {repair:'🔧',maintenance:'🛠️',installation:'⚙️',inspection:'🔍',demo:'📋'};
-  const allV = [...upcoming,...completed];
+// ─── SITE VISITS (accordion + filters) ───
+let visitFilter = {status:'all',type:'all',tech:'all',from:'',to:''};
+function setVisitFilter(k,v){ visitFilter[k]=v; renderView('site-visits'); }
+function resetVisitFilter(){ visitFilter={status:'all',type:'all',tech:'all',from:'',to:''}; renderView('site-visits'); }
+function viewSiteVisits(){
+  const typeIcon={repair:'🔧',maintenance:'🛠️',installation:'⚙️',inspection:'🔍',demo:'📋'};
+  const typeLabel={repair:'On-site Repair',maintenance:'Preventive Maintenance',installation:'Installation',inspection:'Inspection',demo:'Demo / Training'};
+  const f=visitFilter;
+  let visits=[...DB.visits];
+  if(f.status!=='all') visits=visits.filter(v=>v.status===f.status);
+  if(f.type!=='all') visits=visits.filter(v=>v.type===f.type);
+  if(f.tech!=='all') visits=visits.filter(v=>(v.tech||'')===f.tech);
+  if(f.from) visits=visits.filter(v=>(v.date||'')>=f.from);
+  if(f.to) visits=visits.filter(v=>(v.date||'')<=f.to);
+  visits.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const techNames=[...new Set(DB.visits.map(v=>v.tech).filter(Boolean))];
+  const ist="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:6px 9px;outline:none";
+  const sel=(key,val,opts)=>`<select onchange="setVisitFilter('${key}',this.value)" style="${ist}">${opts.map(o=>`<option value="${o[0]}" ${val===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`;
+  const active=(f.status!=='all'||f.type!=='all'||f.tech!=='all'||f.from||f.to);
+  const total=DB.visits.length, scheduled=DB.visits.filter(v=>v.status==='scheduled').length, completed=DB.visits.filter(v=>v.status==='completed').length;
   return `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="font-size:13px;color:var(--t2)">${upcoming.length} upcoming · ${completed.length} completed</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
+    ${sel('status',f.status,[['all','Semua Status'],['scheduled','Scheduled'],['completed','Completed']])}
+    ${sel('type',f.type,[['all','Semua Tipe'],['repair','Repair'],['maintenance','Maintenance'],['installation','Installation'],['inspection','Inspection'],['demo','Demo']])}
+    ${sel('tech',f.tech,[['all','Semua Teknisi'],...techNames.map(n=>[n,n])])}
+    <span style="font-size:12px;color:var(--t3)">Tgl</span>
+    <input type="date" value="${f.from}" onchange="setVisitFilter('from',this.value)" style="${ist}"/>
+    <span style="font-size:12px;color:var(--t3)">s/d</span>
+    <input type="date" value="${f.to}" onchange="setVisitFilter('to',this.value)" style="${ist}"/>
+    ${active?`<button class="btn btn-sm" onclick="resetVisitFilter()">Reset</button>`:''}
+    <div class="sep"></div>
     <button class="btn btn-y btn-sm" onclick="openNewVisit()">+ Schedule Visit</button>
   </div>
-  <div class="visit-grid">
-    ${allV.map(v=>`<div class="visit-card">
-      <div class="vc-top">
-        <div class="vc-icon">${typeIcon[v.type]||'📍'}</div>
-        <div>
-          <div class="vc-title">${esc(v.customer)}</div>
-          <div class="vc-id">${esc(v.id)}</div>
+  <div style="font-size:12px;color:var(--t2);margin-bottom:10px">${visits.length} ditampilkan · ${scheduled} scheduled · ${completed} completed · ${total} total</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    ${visits.length? visits.map(v=>{
+      const st=v.status==='completed'?'s-delivered':'s-repairing';
+      return `<div style="border-bottom:1px solid var(--b1)">
+        <div onclick="const n=this.nextElementSibling;const open=n.style.display==='none';n.style.display=open?'block':'none';this.querySelector('.vchev').textContent=open?'▾':'▸'" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer">
+          <span class="vchev" style="color:var(--t3);width:12px;flex-shrink:0">▸</span>
+          <span style="font-size:18px;flex-shrink:0">${typeIcon[v.type]||'📍'}</span>
+          <div style="min-width:0;flex:1">
+            <div class="bold" style="font-size:13px">${esc(v.customer)} <span class="muted" style="font-weight:400">· ${esc(v.id)}</span></div>
+            <div class="muted" style="font-size:12px">${v.date||'—'} ${v.time||''} · ${esc(typeLabel[v.type]||v.type||'')} · ${v.tech?esc(v.tech):'Unassigned'}</div>
+          </div>
+          <span class="status-badge ${st}" style="flex-shrink:0">${v.status}</span>
         </div>
-        <div style="margin-left:auto"><span class="status-badge ${v.status==='completed'?'s-delivered':'s-repairing'}">${v.status}</span></div>
-      </div>
-      <div class="vc-meta">
-        <div class="vc-field"><label>Machine</label><span>${esc(v.machine)}</span></div>
-        <div class="vc-field"><label>Type</label><span>${esc(v.type)}</span></div>
-        <div class="vc-field"><label>Date & Time</label><span>${v.date} ${v.time}</span></div>
-        <div class="vc-field"><label>Technician</label><span>${v.tech||'Unassigned'}</span></div>
-        <div class="vc-field" style="grid-column:span 2"><label>Address</label><span>${esc(v.address)}</span></div>
-        <div class="vc-field" style="grid-column:span 2"><label>Job</label><span>${esc(v.desc)}</span></div>
-        ${v.notes?`<div class="vc-field" style="grid-column:span 2"><label>Notes</label><span>${esc(v.notes)}</span></div>`:''}
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        ${v.status==='scheduled'?`<button class="btn btn-sm btn-green" onclick="completeVisit('${v.id}')">✓ Mark Complete</button>`:''}
-        <button class="btn btn-sm btn-red" onclick="deleteVisit('${v.id}')">Delete</button>
-      </div>
-    </div>`).join('')}
-    ${allV.length===0?'<div class="empty-row" style="grid-column:span 2;text-align:center;color:var(--t3);padding:40px">No site visits scheduled.</div>':''}
+        <div style="display:none;padding:2px 16px 14px 40px;background:var(--bg2)">
+          <div class="vc-meta" style="padding-top:10px">
+            <div class="vc-field"><label>Machine</label><span>${esc(v.machine)||'—'}</span></div>
+            <div class="vc-field"><label>Phone</label><span>${esc(v.phone)||'—'}</span></div>
+            <div class="vc-field" style="grid-column:span 2"><label>Address</label><span>${esc(v.address)||'—'}</span></div>
+            <div class="vc-field" style="grid-column:span 2"><label>Job</label><span>${esc(v.desc)||'—'}</span></div>
+            ${v.notes?`<div class="vc-field" style="grid-column:span 2"><label>Notes</label><span>${esc(v.notes)}</span></div>`:''}
+          </div>
+          <div class="btn-row" style="margin-top:10px">
+            ${v.status==='scheduled'?`<button class="btn btn-sm btn-green" onclick="event.stopPropagation();completeVisit('${v.id}')">✓ Mark Complete</button>`:''}
+            <button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteVisit('${v.id}')">Delete</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty-row" style="text-align:center;color:var(--t3);padding:40px">Tidak ada kunjungan sesuai filter.</div>'}
   </div>`;
 }
 
-// ─── WORKSHOP SCHEDULE ───
-// Menampilkan jadwal teknisi yang stay di workshop berdasarkan tiket aktif
-// yang punya field workshopDate. Dikelompokkan per tanggal & per teknisi.
-function viewWorkshopSchedule() {
-  const ACTIVE_STATUS = ['received','diagnosing','price-offering','indent-part','repairing','testing','done'];
-  // Hanya tiket aktif yang sudah punya jadwal workshop
-  const scheduled = DB.tickets.filter(t =>
-    t.workshopDate && ACTIVE_STATUS.includes(t.status)
-  );
-
-  // Group by date
-  const byDate = {};
-  scheduled.forEach(t => {
-    const d = t.workshopDate;
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d].push(t);
-  });
-  const sortedDates = Object.keys(byDate).sort();
-
-  // Today's & upcoming counts
-  const today = new Date().toISOString().slice(0,10);
-  const todayCount = (byDate[today] || []).length;
-  const upcomingCount = sortedDates.filter(d => d > today).reduce((a,d)=>a+byDate[d].length,0);
-  const overdueCount = sortedDates.filter(d => d < today).reduce((a,d)=>a+byDate[d].length,0);
-
-  // Tickets without workshop date yet (so admin can quickly assign)
-  const unscheduled = DB.tickets.filter(t =>
-    !t.workshopDate && ACTIVE_STATUS.includes(t.status)
-  );
-
-  // Build cards per date
-  const dateCards = sortedDates.map(date => {
-    const tickets = byDate[date].sort((a,b) => (a.workshopTime||'99:99').localeCompare(b.workshopTime||'99:99'));
-    const isToday = date === today;
-    const isPast = date < today;
-
-    // Group tickets by technician for this date
-    const byTech = {};
-    tickets.forEach(t => {
-      const techName = t.tech || '(Unassigned)';
-      if (!byTech[techName]) byTech[techName] = [];
-      byTech[techName].push(t);
-    });
-
-    const techBlocks = Object.keys(byTech).sort().map(techName => {
-      const tixs = byTech[techName];
-      const color = techColor(techName);
-      const items = tixs.map(t => `
-        <div onclick="openStatusModal('${t.id}')" style="cursor:pointer;background:var(--b1);border:1px solid var(--b2);border-left:3px solid ${color};border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:.15s" onmouseover="this.style.background='var(--b2)'" onmouseout="this.style.background='var(--b1)'">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);min-width:48px">${t.workshopTime||'—:—'}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.id)} · ${esc(t.customer)}</div>
-            <div style="font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.machine)}</div>
-          </div>
-          <span class="status-badge s-${t.status}" style="font-size:10px">${statusLabel(t.status)}</span>
-        </div>
-      `).join('');
-      return `
-        <div style="margin-bottom:14px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed var(--b2)">
-            <div style="width:10px;height:10px;border-radius:50%;background:${color}"></div>
-            <div style="font-size:13px;font-weight:700;color:var(--t1)">${esc(techName)}</div>
-            <div style="font-size:11px;color:var(--t3)">${tixs.length} ticket${tixs.length>1?'s':''}</div>
-          </div>
-          ${items}
-        </div>
-      `;
-    }).join('');
-
-    const dateLabel = fmtDateOnly(date);
-    const dateBadge = isToday
-      ? '<span style="background:var(--y);color:var(--bg);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.05em">TODAY</span>'
-      : isPast
-        ? '<span style="background:var(--red-d);color:var(--red);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">OVERDUE</span>'
-        : '<span style="background:var(--blue-d);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">UPCOMING</span>';
-
-    return `
-      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <div style="font-size:14px;font-weight:700;color:var(--t1)">📅 ${dateLabel}</div>
-          ${dateBadge}
-          <div style="margin-left:auto;font-size:12px;color:var(--t3)">${tickets.length} ticket${tickets.length>1?'s':''} · ${Object.keys(byTech).length} tech${Object.keys(byTech).length>1?'s':''}</div>
-        </div>
-        ${techBlocks}
-      </div>
-    `;
-  }).join('');
-
-  // Unscheduled tickets section
-  const unscheduledBlock = unscheduled.length === 0 ? '' : `
-    <div style="background:var(--b0);border:1px solid var(--orange-d);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="font-size:14px;font-weight:700;color:var(--orange)">⚠️ Tickets Without Workshop Schedule</div>
-        <div style="margin-left:auto;font-size:12px;color:var(--t3)">${unscheduled.length} ticket${unscheduled.length>1?'s':''}</div>
-      </div>
-      ${unscheduled.map(t => `
-        <div onclick="openEditTicket('${t.id}')" style="cursor:pointer;background:var(--b1);border:1px solid var(--b2);border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='var(--b2)'" onmouseout="this.style.background='var(--b1)'">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(t.id)} · ${esc(t.customer)}</div>
-            <div style="font-size:11px;color:var(--t3)">${esc(t.machine)} — ${esc(t.tech||'No tech')}</div>
-          </div>
-          <span class="status-badge s-${t.status}" style="font-size:10px">${statusLabel(t.status)}</span>
-          <button class="btn btn-sm btn-y" onclick="event.stopPropagation();openEditTicket('${t.id}')">Schedule</button>
-        </div>
-      `).join('')}
-    </div>
-  `;
-
-  // Stat boxes
-  const stats = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Today</div>
-        <div style="font-size:28px;font-weight:800;color:var(--y)">${todayCount}</div>
-      </div>
-      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Upcoming</div>
-        <div style="font-size:28px;font-weight:800;color:var(--blue)">${upcomingCount}</div>
-      </div>
-      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Overdue</div>
-        <div style="font-size:28px;font-weight:800;color:var(--red)">${overdueCount}</div>
-      </div>
-      <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">Unscheduled</div>
-        <div style="font-size:28px;font-weight:800;color:var(--orange)">${unscheduled.length}</div>
-      </div>
-    </div>
-  `;
-
-  const empty = sortedDates.length === 0 && unscheduled.length === 0
-    ? `<div style="background:var(--b0);border:1px dashed var(--b2);border-radius:var(--r);padding:60px 20px;text-align:center;color:var(--t3)">
-        <div style="font-size:42px;margin-bottom:10px">🗓️</div>
-        <div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">No workshop schedule yet</div>
-        <div style="font-size:12px">Schedule jobs by setting "Workshop Schedule" date when creating or editing a ticket.</div>
-      </div>`
-    : '';
-
+// ─── PRODUCTIVITY (jumlah service ticket + site visit per teknisi) ───
+function viewProductivity(){
+  const allT=DB.tickets, allV=DB.visits;
+  const rows=DB.technicians.map(t=>{
+    const myT=allT.filter(x=>x.tech===t.name);
+    const myV=allV.filter(x=>x.tech===t.name);
+    const tickets=myT.length, visits=myV.length, total=tickets+visits;
+    const done=myT.filter(x=>['done','delivered'].includes(x.status)).length;
+    const vdone=myV.filter(x=>x.status==='completed').length;
+    return {t,tickets,visits,total,done,vdone};
+  }).sort((a,b)=>b.total-a.total);
+  const maxTotal=Math.max(1,...rows.map(r=>r.total));
   return `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div style="font-size:13px;color:var(--t2)">Workshop schedule for technicians staying on-site (based on tickets with assigned workshop dates)</div>
-      <button class="btn btn-y btn-sm" onclick="openNewTicket()">+ New Ticket</button>
-    </div>
-    ${stats}
-    ${empty}
-    ${unscheduledBlock}
-    ${dateCards}
-  `;
-}
-
-// ─── PRODUCTIVITY ───
-function viewProductivity() {
-  const techs = DB.technicians;
-  const allT = DB.tickets;
-  const allV = DB.visits;
-
-  return `
+  <div style="font-size:13px;color:var(--t2);margin-bottom:14px">Produktivitas = total aktivitas teknisi (<b>jumlah Service Ticket + Site Visit</b>).</div>
   <div class="tech-cards">
-    ${techs.map(tech => {
-      const myTickets = allT.filter(t=>t.tech===tech.name);
-      const active   = myTickets.filter(t=>!['done','delivered'].includes(t.status)).length;
-      const done     = myTickets.filter(t=>['done','delivered'].includes(t.status)).length;
-      const visits   = allV.filter(v=>v.tech===tech.name).length;
-      const total = myTickets.length + visits;
-      const pct = total ? Math.round((done/Math.max(done+active,1))*100) : 0;
-      const urgent = myTickets.filter(t=>t.priority==='urgent'&&!['done','delivered'].includes(t.status)).length;
-      return `<div class="tech-card">
-        <div class="tc-top">
-          <div class="tc-avatar" style="background:${tech.color}20;color:${tech.color}">${tech.name.charAt(0)}</div>
-          <div>
-            <div class="tc-name">${esc(tech.name)}</div>
-            <div class="tc-pos">${esc(tech.spec)} · ${esc(tech.phone)}</div>
-          </div>
+    ${rows.map((r,i)=>`<div class="tech-card">
+      <div class="tc-top">
+        <div class="tc-avatar" style="background:${r.t.color}20;color:${r.t.color}">${(r.t.name||'?').charAt(0)}</div>
+        <div>
+          <div class="tc-name">${esc(r.t.name)} ${i===0&&r.total>0?'<span style="font-size:11px;color:var(--y)">🏆 Top</span>':''}</div>
+          <div class="tc-pos">${esc(r.t.spec)} · ${esc(r.t.phone)}</div>
         </div>
-        <div class="tc-stats">
-          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--y)">${active}</div><div class="tc-stat-l">Active</div></div>
-          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--green)">${done}</div><div class="tc-stat-l">Done</div></div>
-          <div class="tc-stat"><div class="tc-stat-v" style="color:var(--blue)">${visits}</div><div class="tc-stat-l">Visits</div></div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:26px;font-weight:800;color:${r.t.color};line-height:1">${r.total}</div>
+          <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Total Aktivitas</div>
         </div>
-        ${urgent>0?`<div style="margin-top:10px;background:var(--red-d);color:var(--red);border-radius:var(--r);padding:6px 10px;font-size:11px;font-weight:600">⚡ ${urgent} urgent ticket${urgent>1?'s':''} pending</div>`:''}
-        <div class="bar-wrap">
-          <div class="bar-lbl"><span>Completion rate</span><span style="color:${tech.color};font-weight:700">${pct}%</span></div>
-          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${tech.color}"></div></div>
-        </div>
-      </div>`;
-    }).join('')}
+      </div>
+      <div class="tc-stats">
+        <div class="tc-stat"><div class="tc-stat-v" style="color:var(--y)">${r.tickets}</div><div class="tc-stat-l">Tickets</div></div>
+        <div class="tc-stat"><div class="tc-stat-v" style="color:var(--blue)">${r.visits}</div><div class="tc-stat-l">Visits</div></div>
+        <div class="tc-stat"><div class="tc-stat-v" style="color:var(--green)">${r.done+r.vdone}</div><div class="tc-stat-l">Selesai</div></div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-lbl"><span>Relatif ke teknisi tersibuk</span><span style="color:${r.t.color};font-weight:700">${Math.round(r.total/maxTotal*100)}%</span></div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(r.total/maxTotal*100)}%;background:${r.t.color}"></div></div>
+      </div>
+    </div>`).join('')}
+    ${rows.length===0?'<div class="empty-row" style="color:var(--t3);padding:30px">Belum ada teknisi.</div>':''}
   </div>
 
   <div class="dash-grid">
     <div class="card">
-      <div class="card-hd"><h3>Ticket Details by Technician</h3></div>
+      <div class="card-hd"><h3>Rincian Aktivitas per Teknisi</h3></div>
       <table class="tbl">
-        <thead><tr><th>Technician</th><th>Received</th><th>Diagnosing</th><th>Repairing</th><th>Testing</th><th>Done</th><th>Delivered</th><th>Total</th></tr></thead>
-        <tbody>${techs.map(tech=>{
-          const myT = allT.filter(t=>t.tech===tech.name);
-          const cnt = s => myT.filter(t=>t.status===s).length;
-          return `<tr>
-            <td><span class="tech-chip"><span class="dot" style="background:${tech.color}"></span>${esc(tech.name)}</span></td>
-            <td>${cnt('received')||'—'}</td><td>${cnt('diagnosing')||'—'}</td>
-            <td>${cnt('repairing')||'—'}</td><td>${cnt('testing')||'—'}</td>
-            <td style="color:var(--green);font-weight:600">${cnt('done')||'—'}</td>
-            <td style="color:var(--t3)">${cnt('delivered')||'—'}</td>
-            <td style="font-weight:700">${myT.length}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <div class="card-hd"><h3>Site Visits Summary</h3></div>
-      <table class="tbl">
-        <thead><tr><th>Technician</th><th>Scheduled</th><th>Completed</th></tr></thead>
-        <tbody>${techs.map(tech=>{
-          const myV = allV.filter(v=>v.tech===tech.name);
-          return `<tr>
-            <td><span class="tech-chip"><span class="dot" style="background:${tech.color}"></span>${esc(tech.name)}</span></td>
-            <td style="color:var(--orange)">${myV.filter(v=>v.status==='scheduled').length||'—'}</td>
-            <td style="color:var(--green)">${myV.filter(v=>v.status==='completed').length||'—'}</td>
-          </tr>`;
-        }).join('')}</tbody>
+        <thead><tr><th>Technician</th><th>Service Tickets</th><th>Site Visits</th><th>Total Aktivitas</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td><span class="tech-chip"><span class="dot" style="background:${r.t.color}"></span>${esc(r.t.name)}</span></td>
+          <td>${r.tickets}</td>
+          <td>${r.visits}</td>
+          <td style="font-weight:700">${r.total}</td>
+        </tr>`).join('')}</tbody>
       </table>
     </div>
   </div>`;
@@ -1769,7 +1651,7 @@ function openNewTicket() {
   editingTicketId = null;
   document.getElementById('modal-ticket-title').textContent = 'New Service Ticket';
   document.getElementById('save-ticket-btn').textContent = 'Create Ticket';
-  ['f-customer','f-phone','f-machine','f-serial','f-notes','f-eta','f-workshop-date','f-workshop-time'].forEach(id => document.getElementById(id).value='');
+  ['f-customer','f-phone','f-machine','f-serial','f-notes','f-eta'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-mactype').value='Pressure Washer';
   document.getElementById('f-priority').value='normal';
   document.getElementById('f-problem').value='';
@@ -1792,8 +1674,6 @@ function openEditTicket(id) {
   document.getElementById('f-priority').value = t.priority;
   document.getElementById('f-notes').value = t.notes;
   document.getElementById('f-eta').value = t.etaDate || '';
-  document.getElementById('f-workshop-date').value = t.workshopDate || '';
-  document.getElementById('f-workshop-time').value = t.workshopTime || '';
   populateTechSelect('f-tech', t.tech);
   openModal('modal-ticket');
 }
@@ -1805,13 +1685,11 @@ function saveTicket() {
   if (!customer || !machine || !problem) { toast('Fill required fields', 'err'); return; }
 
   const etaDate = document.getElementById('f-eta').value;
-  const workshopDate = document.getElementById('f-workshop-date').value;
-  const workshopTime = document.getElementById('f-workshop-time').value;
 
   if (editingTicketId) {
     const t = DB.tickets.find(x=>x.id===editingTicketId);
     const oldEta = t.etaDate;
-    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, workshopDate, workshopTime, updatedAt:Date.now() });
+    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, updatedAt:Date.now() });
     // Log ETA change in history kalau berubah
     if (etaDate && etaDate !== oldEta) {
       t.history.push({ ts:Date.now(), action:'ETA Updated', note:'Estimated completion date set to ' + fmtDateOnly(etaDate), tech:'Admin' });
@@ -1819,7 +1697,7 @@ function saveTicket() {
     toast('Ticket updated', 'ok');
   } else {
     const id = newTicketId();
-    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, workshopDate, workshopTime, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
+    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
     toast('Ticket created: ' + id, 'ok');
   }
   saveData(DB);
@@ -1968,6 +1846,8 @@ function viewSettings() {
     </div>
 
     ${trialSettingsCard()}
+
+    ${pmSettingsCard()}
 
     <div class="card">
       <div class="card-hd"><h3>ℹ️ Info Sesi</h3></div>
@@ -2473,6 +2353,151 @@ function saveTrialSettings(){
   const sc=(document.getElementById('set-sc')||{}).value||'';
   const s=getSettings(); s.salesManagers=managers; s.scEmails=sc;
   saveData(DB); renderView('settings'); toast('Pengaturan notifikasi disimpan','ok');
+}
+
+// ═══════════════════════════════════════════════
+// PREVENTIVE MAINTENANCE (free PM, terhubung Odoo)
+// Tiap invoice KARCHER (bukan SPAREPART) >= threshold = 1 entitlement:
+// 3x kunjungan PM dalam 12 bulan sejak tanggal invoice.
+// ═══════════════════════════════════════════════
+function fmtRp(n){ const v=Math.round(Number(n)||0); return 'Rp ' + v.toLocaleString('id-ID'); }
+function addMonths(dateStr, m){ const d=new Date(String(dateStr||'').slice(0,10)+'T00:00:00'); if(isNaN(d)) return null; d.setMonth(d.getMonth()+m); return d; }
+function dDays(a,b){ return Math.round((a-b)/86400000); }
+function pmThreshold(){ const v=Number(getSettings().pmThreshold); return v>0?v:15000000; }
+function pmMonthsBack(){ const v=Number(getSettings().pmMonthsBack); return v>0?v:24; }
+function pmVisitsFor(id){ const v=(DB.pm&&DB.pm.visits)?DB.pm.visits[id]:null; return Array.isArray(v)?v:[]; }
+function shortDate(d){ return d? d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'—'; }
+function pmCompute(e){
+  const end=addMonths(e.date,12);
+  const visits=pmVisitsFor(e.invoiceId).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const done=visits.length;
+  const now=new Date(); now.setHours(0,0,0,0);
+  const expired = end && now>end;
+  let status='active', nextDue=null, badge='', badgeCol='';
+  if(done>=3){ status='completed'; }
+  else if(expired){ status='expired'; }
+  else {
+    const dues=[addMonths(e.date,4),addMonths(e.date,8),addMonths(e.date,12)];
+    nextDue=dues[done]||end;
+    const dd=dDays(nextDue, now);
+    if(dd<0){ status='overdue'; badge='Terlambat '+Math.abs(dd)+' hari'; badgeCol='#ff5a5a'; }
+    else if(dd<=30){ status='due'; badge='Jatuh tempo '+dd+' hari'; badgeCol='#f59e0b'; }
+    else { status='active'; badge='On track'; badgeCol='#3ecf8e'; }
+  }
+  return {end,visits,done,remaining:Math.max(0,3-done),expired,status,nextDue,badge,badgeCol};
+}
+function viewPM(){
+  const ents=(DB.pm&&DB.pm.entitlements)||[];
+  const f=DB._pmFilter||'all';
+  const q=(DB._pmSearch||'').toLowerCase();
+  const rows=ents.map(e=>({e,c:pmCompute(e)}));
+  const counts={all:rows.length,overdue:0,due:0,active:0,completed:0,expired:0};
+  rows.forEach(r=>{ if(counts[r.c.status]!=null) counts[r.c.status]++; });
+  let shown=rows;
+  if(f!=='all') shown=shown.filter(r=>r.c.status===f);
+  if(q) shown=shown.filter(r=>String(r.e.partner||'').toLowerCase().includes(q)||String(r.e.invoice||'').toLowerCase().includes(q));
+  const rank={overdue:0,due:1,active:2,completed:3,expired:4};
+  shown.sort((a,b)=>(rank[a.c.status]-rank[b.c.status]) || ((a.c.nextDue&&b.c.nextDue)?(a.c.nextDue-b.c.nextDue):0));
+  const last=(DB.pm&&DB.pm.lastSync)?('Sinkron terakhir: '+fmtDate(DB.pm.lastSync)):'Belum pernah sync';
+  const cats=(DB.pm&&DB.pm.detectedCategories)||[];
+  const tab=(k,l)=>`<button class="btn btn-sm ${f===k?'btn-y':''}" onclick="DB._pmFilter='${k}';renderView('pm')">${l} (${counts[k]})</button>`;
+  const dots=(c)=>{ let h=''; for(let i=0;i<3;i++){ h+=`<span style="display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:4px;background:${i<c.done?'var(--green)':'var(--bg3)'};border:1px solid ${i<c.done?'var(--green)':'var(--b2)'}"></span>`; } return h; };
+  const stMap={overdue:['Terlambat','#ff5a5a'],due:['Jatuh Tempo','#f59e0b'],active:['Berjalan','#3ecf8e'],completed:['Selesai 3/3','#8892aa'],expired:['Kadaluarsa','#8892aa']};
+  const cards=shown.map(({e,c})=>{
+    const st=stMap[c.status]||stMap.active;
+    const vis=c.visits.map((v,i)=>`<div style="font-size:12px;color:var(--t2);margin-top:3px">PM ${i+1}: <b style="color:var(--t1)">${fmtDateOnly(v.date)}</b>${v.by?' · '+esc(v.by):''}${v.note?` <span style="color:var(--t3)">— ${esc(v.note)}</span>`:''}</div>`).join('');
+    return `<div class="visit-card">
+      <div class="vc-top"><div class="vc-icon">🛡️</div>
+        <div style="min-width:0"><div class="vc-title">${esc(e.partner)}</div><div class="vc-id">${esc(e.invoice)}</div></div>
+        <div style="margin-left:auto"><span style="background:${st[1]}22;color:${st[1]};border:1px solid ${st[1]}55;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st[0]}</span></div>
+      </div>
+      <div class="vc-meta">
+        <div class="vc-field"><label>Nilai Pembelian</label><span style="font-weight:700">${fmtRp(e.amount)}</span></div>
+        <div class="vc-field"><label>Tgl Beli</label><span>${fmtDateOnly(e.date)}</span></div>
+        <div class="vc-field" style="grid-column:span 2"><label>Periode PM (12 bln)</label><span>${fmtDateOnly(e.date)} → ${shortDate(c.end)}</span></div>
+        <div class="vc-field" style="grid-column:span 2"><label>Progress</label><span>${dots(c)} <b>${c.done}/3</b></span></div>
+        ${(c.status!=='completed'&&c.status!=='expired')?`<div class="vc-field" style="grid-column:span 2"><label>PM berikutnya</label><span>${shortDate(c.nextDue)} <span style="color:${c.badgeCol};font-weight:700">· ${c.badge}</span></span></div>`:''}
+      </div>
+      ${vis?`<div style="margin-top:8px;border-top:1px solid var(--b1);padding-top:8px">${vis}</div>`:''}
+      <div class="btn-row" style="margin-top:10px">
+        ${(c.remaining>0&&!c.expired)?`<button class="btn btn-sm btn-y" onclick="openPM('${esc(String(e.invoiceId))}')">+ Catat PM (${c.done}/3)</button>`:''}
+        ${(c.expired&&c.done<3)?`<span class="muted" style="font-size:11px">Periode berakhir · ${c.done}/3 terpakai</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="font-size:12px;color:var(--t2)">${last} · Threshold ${fmtRp(pmThreshold())}/invoice${cats.length?` · Kategori: ${cats.map(esc).join(', ')}`:''}</div>
+    <button class="btn btn-y btn-sm" id="pm-sync-btn" onclick="syncPM()">🔄 Sync dari Odoo</button>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('expired','Kadaluarsa')}</div>
+  <input type="text" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="width:100%;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none;margin-bottom:12px"/>
+  ${ents.length===0?`<div class="empty-row" style="text-align:center;color:var(--t3);padding:40px">Belum ada data. Klik <b>Sync dari Odoo</b> untuk menarik invoice KARCHER (≥ ${fmtRp(pmThreshold())}) yang berhak free PM.</div>`:`<div class="visit-grid">${cards||'<div class="empty-row" style="grid-column:span 2;text-align:center;color:var(--t3);padding:30px">Tidak ada yang cocok dengan filter.</div>'}</div>`}`;
+}
+async function syncPM(){
+  const btn=document.getElementById('pm-sync-btn'); if(btn){ btn.disabled=true; btn.textContent='⏳ Sync…'; }
+  try{
+    const res=await fetch(PM_FN_URL,{ method:'POST', headers:{'Content-Type':'application/json','apikey':EMAIL_ANON_KEY,'Authorization':'Bearer '+EMAIL_ANON_KEY}, body:JSON.stringify({ threshold:pmThreshold(), monthsBack:pmMonthsBack() }) });
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'Gagal');
+    if(!DB.pm) DB.pm={visits:{}};
+    DB.pm.entitlements=Array.isArray(data.entitlements)?data.entitlements:[];
+    DB.pm.detectedCategories=data.detectedCategories||[];
+    DB.pm.lastSync=Date.now();
+    saveData(DB); renderView('pm');
+    toast(`Sync OK: ${DB.pm.entitlements.length} invoice berhak PM`,'ok');
+  }catch(e){ toast('Sync gagal: '+e.message,'err'); }
+  if(btn){ btn.disabled=false; btn.textContent='🔄 Sync dari Odoo'; }
+}
+function openPM(invoiceId){
+  const e=((DB.pm&&DB.pm.entitlements)||[]).find(x=>String(x.invoiceId)===String(invoiceId)); if(!e) return;
+  document.getElementById('pm-invoice').value=invoiceId;
+  document.getElementById('pm-label').textContent=e.partner+' · '+e.invoice;
+  document.getElementById('pm-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pm-note').value='';
+  document.getElementById('pm-by').innerHTML='<option value="">— Pilih —</option><option>Tim Sales</option>'+DB.technicians.map(t=>`<option>${esc(t.name)}</option>`).join('');
+  openModal('modal-pm');
+}
+function savePM(){
+  const id=document.getElementById('pm-invoice').value;
+  const date=document.getElementById('pm-date').value;
+  const by=document.getElementById('pm-by').value;
+  const note=document.getElementById('pm-note').value.trim();
+  if(!date){ toast('Isi tanggal PM','err'); return; }
+  if(!DB.pm) DB.pm={entitlements:[],visits:{}};
+  if(!DB.pm.visits) DB.pm.visits={};
+  const arr=DB.pm.visits[id]||[];
+  if(arr.length>=3){ toast('Jatah 3x PM sudah penuh','err'); return; }
+  arr.push({date,by,note,ts:Date.now()});
+  DB.pm.visits[id]=arr;
+  saveData(DB); closeModal('modal-pm'); renderView('pm'); toast('PM dicatat','ok');
+}
+function updatePMBadge(){
+  const el=document.getElementById('pm-badge'); if(!el) return;
+  const ents=(DB.pm&&DB.pm.entitlements)||[];
+  let n=0; ents.forEach(e=>{ const c=pmCompute(e); if(c.status==='overdue'||c.status==='due') n++; });
+  if(n>0){ el.textContent=n; el.style.display='inline-block'; } else el.style.display='none';
+}
+function pmSettingsCard(){
+  const s=getSettings();
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><h3>🛡️ Preventive Maintenance (Odoo)</h3></div>
+    <div class="card-body" style="padding:16px">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.5">Customer yang membeli unit kategori KARCHER (bukan sparepart) per invoice ≥ ambang berikut berhak 3× free PM dalam 12 bulan. Data ditarik dari Odoo via menu Preventive Maintenance.</div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Ambang nilai / invoice (Rp)</div><input type="number" id="set-pm-threshold" value="${Number(s.pmThreshold)>0?Number(s.pmThreshold):15000000}" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/></div>
+        <div class="f-row"><div class="f-label">Tarik data ke belakang (bulan)</div><input type="number" id="set-pm-months" value="${Number(s.pmMonthsBack)>0?Number(s.pmMonthsBack):24}" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/></div>
+      </div>
+      <button class="btn btn-y btn-sm" onclick="savePMSettings()">💾 Simpan</button>
+    </div>
+  </div>`;
+}
+function savePMSettings(){
+  const s=getSettings();
+  const th=Number((document.getElementById('set-pm-threshold')||{}).value);
+  const mb=Number((document.getElementById('set-pm-months')||{}).value);
+  s.pmThreshold=th>0?th:15000000; s.pmMonthsBack=mb>0?mb:24;
+  saveData(DB); renderView('settings'); toast('Pengaturan PM disimpan','ok');
 }
 
 // ─── HIDDEN STAFF ACCESS ───
