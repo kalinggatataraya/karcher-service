@@ -2393,9 +2393,13 @@ function viewPM(){
   const rows=ents.map(e=>({e,c:pmCompute(e)}));
   const counts={all:rows.length,overdue:0,due:0,active:0,completed:0,expired:0};
   rows.forEach(r=>{ if(counts[r.c.status]!=null) counts[r.c.status]++; });
+  const byF=DB._pmBy||'all';
+  const byList=[...new Set(rows.flatMap(r=>r.c.visits.map(v=>v.by).filter(Boolean)))].sort();
   let shown=rows;
   if(f!=='all') shown=shown.filter(r=>r.c.status===f);
   if(q) shown=shown.filter(r=>String(r.e.partner||'').toLowerCase().includes(q)||String(r.e.invoice||'').toLowerCase().includes(q));
+  if(byF==='__none__') shown=shown.filter(r=>r.c.done===0);
+  else if(byF!=='all') shown=shown.filter(r=>r.c.visits.some(v=>(v.by||'')===byF));
   const rank={overdue:0,due:1,active:2,completed:3,expired:4};
   shown.sort((a,b)=>(rank[a.c.status]-rank[b.c.status]) || ((a.c.nextDue&&b.c.nextDue)?(a.c.nextDue-b.c.nextDue):0));
   const last=(DB.pm&&DB.pm.lastSync)?('Sinkron terakhir: '+fmtDate(DB.pm.lastSync)):'Belum pernah sync';
@@ -2431,7 +2435,15 @@ function viewPM(){
     <button class="btn btn-y btn-sm" id="pm-sync-btn" onclick="syncPM()">🔄 Sync dari Odoo</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('expired','Kadaluarsa')}</div>
-  <input type="text" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="width:100%;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none;margin-bottom:12px"/>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="text" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none"/>
+    <span style="font-size:12px;color:var(--t3)">Ditandai oleh:</span>
+    <select onchange="DB._pmBy=this.value;renderView('pm')" style="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:7px 10px;outline:none">
+      <option value="all" ${byF==='all'?'selected':''}>Semua</option>
+      <option value="__none__" ${byF==='__none__'?'selected':''}>Belum ada PM</option>
+      ${byList.map(n=>`<option value="${esc(n)}" ${byF===n?'selected':''}>${esc(n)}</option>`).join('')}
+    </select>
+  </div>
   ${ents.length===0?`<div class="empty-row" style="text-align:center;color:var(--t3);padding:40px">Belum ada data. Klik <b>Sync dari Odoo</b> untuk menarik invoice KARCHER (≥ ${fmtRp(pmThreshold())}) yang berhak free PM.</div>`:`<div class="visit-grid">${cards||'<div class="empty-row" style="grid-column:span 2;text-align:center;color:var(--t3);padding:30px">Tidak ada yang cocok dengan filter.</div>'}</div>`}`;
 }
 async function syncPM(){
