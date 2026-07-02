@@ -1224,7 +1224,7 @@ function defaultData() {
   };
 }
 
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; return d; }
 let DB = normalizeDB(loadData());
 
 // ═══════════════════════════════════════════════
@@ -2369,12 +2369,14 @@ function pmVisitsFor(id){ const v=(DB.pm&&DB.pm.visits)?DB.pm.visits[id]:null; r
 function shortDate(d){ return d? d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'—'; }
 function pmCompute(e){
   const end=addMonths(e.date,12);
+  const cancelled=(DB.pm&&DB.pm.cancelled)?DB.pm.cancelled[e.invoiceId]:null;
   const visits=pmVisitsFor(e.invoiceId).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const done=visits.length;
   const now=new Date(); now.setHours(0,0,0,0);
   const expired = end && now>end;
   let status='active', nextDue=null, badge='', badgeCol='';
-  if(done>=3){ status='completed'; }
+  if(cancelled){ status='cancelled'; }
+  else if(done>=3){ status='completed'; }
   else if(expired){ status='expired'; }
   else {
     const dues=[addMonths(e.date,4),addMonths(e.date,8),addMonths(e.date,12)];
@@ -2384,14 +2386,14 @@ function pmCompute(e){
     else if(dd<=30){ status='due'; badge='Jatuh tempo '+dd+' hari'; badgeCol='#f59e0b'; }
     else { status='active'; badge='On track'; badgeCol='#3ecf8e'; }
   }
-  return {end,visits,done,remaining:Math.max(0,3-done),expired,status,nextDue,badge,badgeCol};
+  return {end,visits,done,remaining:Math.max(0,3-done),expired,status,nextDue,badge,badgeCol,cancelled};
 }
 function viewPM(){
   const ents=(DB.pm&&DB.pm.entitlements)||[];
   const f=DB._pmFilter||'all';
   const q=(DB._pmSearch||'').toLowerCase();
   const rows=ents.map(e=>({e,c:pmCompute(e)}));
-  const counts={all:rows.length,overdue:0,due:0,active:0,completed:0,expired:0};
+  const counts={all:rows.length,overdue:0,due:0,active:0,completed:0,expired:0,cancelled:0};
   rows.forEach(r=>{ if(counts[r.c.status]!=null) counts[r.c.status]++; });
   const byF=DB._pmBy||'all';
   const byList=[...new Set(rows.flatMap(r=>r.c.visits.map(v=>v.by).filter(Boolean)))].sort();
@@ -2400,16 +2402,25 @@ function viewPM(){
   if(q) shown=shown.filter(r=>String(r.e.partner||'').toLowerCase().includes(q)||String(r.e.invoice||'').toLowerCase().includes(q));
   if(byF==='__none__') shown=shown.filter(r=>r.c.done===0);
   else if(byF!=='all') shown=shown.filter(r=>r.c.visits.some(v=>(v.by||'')===byF));
-  const rank={overdue:0,due:1,active:2,completed:3,expired:4};
+  const rank={overdue:0,due:1,active:2,completed:3,cancelled:4,expired:5};
   shown.sort((a,b)=>(rank[a.c.status]-rank[b.c.status]) || ((a.c.nextDue&&b.c.nextDue)?(a.c.nextDue-b.c.nextDue):0));
   const last=(DB.pm&&DB.pm.lastSync)?('Sinkron terakhir: '+fmtDate(DB.pm.lastSync)):'Belum pernah sync';
   const cats=(DB.pm&&DB.pm.detectedCategories)||[];
   const tab=(k,l)=>`<button class="btn btn-sm ${f===k?'btn-y':''}" onclick="DB._pmFilter='${k}';renderView('pm')">${l} (${counts[k]})</button>`;
   const dots=(c)=>{ let h=''; for(let i=0;i<3;i++){ h+=`<span style="display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:4px;background:${i<c.done?'var(--green)':'var(--bg3)'};border:1px solid ${i<c.done?'var(--green)':'var(--b2)'}"></span>`; } return h; };
-  const stMap={overdue:['Terlambat','#ff5a5a'],due:['Jatuh Tempo','#f59e0b'],active:['Berjalan','#3ecf8e'],completed:['Selesai 3/3','#8892aa'],expired:['Kadaluarsa','#8892aa']};
+  const stMap={overdue:['Terlambat','#ff5a5a'],due:['Jatuh Tempo','#f59e0b'],active:['Berjalan','#3ecf8e'],completed:['Selesai 3/3','#8892aa'],expired:['Kadaluarsa','#8892aa'],cancelled:['Dibatalkan','#8892aa']};
   const cards=shown.map(({e,c})=>{
     const st=stMap[c.status]||stMap.active;
     const vis=c.visits.map((v,i)=>`<div style="font-size:12px;color:var(--t2);margin-top:3px">PM ${i+1}: <b style="color:var(--t1)">${fmtDateOnly(v.date)}</b>${v.by?' · '+esc(v.by):''}${v.note?` <span style="color:var(--t3)">— ${esc(v.note)}</span>`:''}</div>`).join('');
+    const eid=esc(String(e.invoiceId));
+    let actions='';
+    if(c.status==='cancelled'){
+      actions=`<span class="muted" style="font-size:11px">Dibatalkan${c.cancelled&&c.cancelled.reason?': '+esc(c.cancelled.reason):''}</span><button class="btn btn-sm" onclick="uncancelPM('${eid}')">Aktifkan lagi</button>`;
+    } else {
+      if(c.remaining>0&&!c.expired) actions+=`<button class="btn btn-sm btn-y" onclick="openPM('${eid}')">+ Catat PM (${c.done}/3)</button>`;
+      if(c.expired&&c.done<3) actions+=`<span class="muted" style="font-size:11px">Periode berakhir · ${c.done}/3 terpakai</span>`;
+      actions+=`<button class="btn btn-sm btn-red" onclick="cancelPM('${eid}')">Batalkan</button>`;
+    }
     return `<div class="visit-card">
       <div class="vc-top"><div class="vc-icon">🛡️</div>
         <div style="min-width:0"><div class="vc-title">${esc(e.partner)}</div><div class="vc-id">${esc(e.invoice)}</div></div>
@@ -2423,10 +2434,7 @@ function viewPM(){
         ${(c.status!=='completed'&&c.status!=='expired')?`<div class="vc-field" style="grid-column:span 2"><label>PM berikutnya</label><span>${shortDate(c.nextDue)} <span style="color:${c.badgeCol};font-weight:700">· ${c.badge}</span></span></div>`:''}
       </div>
       ${vis?`<div style="margin-top:8px;border-top:1px solid var(--b1);padding-top:8px">${vis}</div>`:''}
-      <div class="btn-row" style="margin-top:10px">
-        ${(c.remaining>0&&!c.expired)?`<button class="btn btn-sm btn-y" onclick="openPM('${esc(String(e.invoiceId))}')">+ Catat PM (${c.done}/3)</button>`:''}
-        ${(c.expired&&c.done<3)?`<span class="muted" style="font-size:11px">Periode berakhir · ${c.done}/3 terpakai</span>`:''}
-      </div>
+      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap;gap:6px">${actions}</div>
     </div>`;
   }).join('');
   return `
@@ -2434,7 +2442,7 @@ function viewPM(){
     <div style="font-size:12px;color:var(--t2)">${last} · Threshold ${fmtRp(pmThreshold())}/invoice${cats.length?` · Kategori: ${cats.map(esc).join(', ')}`:''}</div>
     <button class="btn btn-y btn-sm" id="pm-sync-btn" onclick="syncPM()">🔄 Sync dari Odoo</button>
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('expired','Kadaluarsa')}</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('cancelled','Dibatalkan')}${tab('expired','Kadaluarsa')}</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
     <input type="text" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none"/>
     <span style="font-size:12px;color:var(--t3)">Ditandai oleh:</span>
@@ -2483,6 +2491,17 @@ function savePM(){
   arr.push({date,by,note,ts:Date.now()});
   DB.pm.visits[id]=arr;
   saveData(DB); closeModal('modal-pm'); renderView('pm'); toast('PM dicatat','ok');
+}
+function cancelPM(id){
+  const reason=prompt('Alasan customer ini tidak perlu PM (opsional):',''); if(reason===null) return;
+  if(!DB.pm) DB.pm={}; if(!DB.pm.cancelled) DB.pm.cancelled={};
+  DB.pm.cancelled[id]={by:(currentUser&&currentUser.name)||'', reason:reason||'', ts:Date.now()};
+  saveData(DB); renderView('pm'); toast('Ditandai tidak perlu PM','ok');
+}
+function uncancelPM(id){
+  if(!confirm('Aktifkan lagi entitlement PM ini?')) return;
+  if(DB.pm&&DB.pm.cancelled) delete DB.pm.cancelled[id];
+  saveData(DB); renderView('pm'); toast('Diaktifkan kembali','ok');
 }
 function updatePMBadge(){
   const el=document.getElementById('pm-badge'); if(!el) return;
