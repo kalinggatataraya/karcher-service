@@ -930,8 +930,8 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="modal-body">
       <input type="hidden" id="pmi-invoice"/>
       <div class="f-row"><div class="f-label">Entitlement</div><div id="pmi-label" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
-      <div class="f-row"><div class="f-label">Tipe Mesin Kärcher</div><input type="text" id="pmi-machine" placeholder="mis. HD 6/15, K5 Premium, BR 45/22" list="pmi-machine-list" autocomplete="off"/><datalist id="pmi-machine-list"></datalist></div>
-      <div class="f-row"><div class="f-label">Nama Sales (pemegang customer)</div><input type="text" id="pmi-sales" placeholder="Nama sales" list="pmi-sales-list" autocomplete="off"/><datalist id="pmi-sales-list"></datalist></div>
+      <div class="f-row"><div class="f-label">Tipe Mesin (kosongkan = pakai data Odoo)</div><input type="text" id="pmi-machine" placeholder="mis. HD 6/15, K5 Premium, BR 45/22" list="pmi-machine-list" autocomplete="off"/><datalist id="pmi-machine-list"></datalist></div>
+      <div class="f-row"><div class="f-label">Salesman (kosongkan = pakai data Odoo)</div><input type="text" id="pmi-sales" placeholder="Nama sales" list="pmi-sales-list" autocomplete="off"/><datalist id="pmi-sales-list"></datalist></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-pminfo')">Batal</button>
@@ -1246,7 +1246,7 @@ function defaultData() {
   };
 }
 
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
 let DB = normalizeDB(loadData());
 
 // ═══════════════════════════════════════════════
@@ -2421,7 +2421,7 @@ function viewPM(){
   const byList=[...new Set(rows.flatMap(r=>r.c.visits.map(v=>v.by).filter(Boolean)))].sort();
   let shown=rows;
   if(f!=='all') shown=shown.filter(r=>r.c.status===f);
-  if(q) shown=shown.filter(r=>{const m=((DB.pm&&DB.pm.meta)||{})[r.e.invoiceId]||{}; return String(r.e.partner||'').toLowerCase().includes(q)||String(r.e.invoice||'').toLowerCase().includes(q)||String(m.machine||'').toLowerCase().includes(q)||String(m.sales||'').toLowerCase().includes(q);});
+  if(q) shown=shown.filter(r=>{const m=((DB.pm&&DB.pm.meta)||{})[r.e.invoiceId]||{}; return String(r.e.partner||'').toLowerCase().includes(q)||String(r.e.invoice||'').toLowerCase().includes(q)||String(m.machine||r.e.machine||'').toLowerCase().includes(q)||String(m.sales||r.e.salesman||'').toLowerCase().includes(q);});
   if(byF==='__none__') shown=shown.filter(r=>r.c.done===0);
   else if(byF!=='all') shown=shown.filter(r=>r.c.visits.some(v=>(v.by||'')===byF));
   const rank={overdue:0,due:1,active:2,completed:3,cancelled:4,expired:5};
@@ -2453,8 +2453,8 @@ function viewPM(){
       <div class="vc-meta">
         <div class="vc-field"><label>Nilai Pembelian</label><span style="font-weight:700">${fmtRp(e.amount)}</span></div>
         <div class="vc-field"><label>Tgl Beli</label><span>${fmtDateOnly(e.date)}</span></div>
-        <div class="vc-field"><label>Tipe Mesin</label><span>${meta.machine?esc(meta.machine):'<span style=\'color:var(--t3)\'>— belum diisi</span>'}</span></div>
-        <div class="vc-field"><label>Sales</label><span>${meta.sales?esc(meta.sales):'<span style=\'color:var(--t3)\'>— belum diisi</span>'}</span></div>
+        <div class="vc-field"><label>Tipe Mesin</label><span>${(meta.machine||e.machine)?esc(meta.machine||e.machine):'<span style=\'color:var(--t3)\'>—</span>'}</span></div>
+        <div class="vc-field"><label>Salesman</label><span>${(meta.sales||e.salesman)?esc(meta.sales||e.salesman):'<span style=\'color:var(--t3)\'>—</span>'}</span></div>
         <div class="vc-field" style="grid-column:span 2"><label>Periode PM (12 bln)</label><span>${fmtDateOnly(e.date)} → ${shortDate(c.end)}</span></div>
         <div class="vc-field" style="grid-column:span 2"><label>Progress</label><span>${dots(c)} <b>${c.done}/3</b></span></div>
         ${(c.status!=='completed'&&c.status!=='expired')?`<div class="vc-field" style="grid-column:span 2"><label>PM berikutnya</label><span>${shortDate(c.nextDue)} <span style="color:${c.badgeCol};font-weight:700">· ${c.badge}</span></span></div>`:''}
@@ -2465,7 +2465,7 @@ function viewPM(){
   }).join('');
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-    <div style="font-size:12px;color:var(--t2)">${last} · Threshold ${fmtRp(pmThreshold())}/invoice${cats.length?` · Kategori: ${cats.map(esc).join(', ')}`:''}</div>
+    <div style="font-size:12px;color:var(--t2)">${last} · Threshold ${fmtRp(pmThreshold())}/invoice${cats.length?` · Kategori: ${cats.map(esc).join(', ')}`:''}${(DB.pm&&DB.pm.salesmanField)?` · Salesman: Odoo <b>${esc(DB.pm.salesmanField.label||DB.pm.salesmanField.name)}</b>`:''}</div>
     <button class="btn btn-y btn-sm" id="pm-sync-btn" onclick="syncPM()">🔄 Sync dari Odoo</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('cancelled','Dibatalkan')}${tab('expired','Kadaluarsa')}</div>
@@ -2487,7 +2487,8 @@ async function syncPM(){
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'Gagal');
     if(!DB.pm) DB.pm={visits:{}};
-    DB.pm.entitlements=(Array.isArray(data.entitlements)?data.entitlements:[]).map(e=>({invoiceId:e.invoiceId, invoice:e.invoice, partner:e.partner, date:e.date, amount:e.amount}));
+    DB.pm.entitlements=(Array.isArray(data.entitlements)?data.entitlements:[]).map(e=>({invoiceId:e.invoiceId, invoice:e.invoice, partner:e.partner, date:e.date, amount:e.amount, machine:e.machine||'', salesman:e.salesman||''}));
+    DB.pm.salesmanField=data.salesmanField||null;
     DB.pm.detectedCategories=data.detectedCategories||[];
     DB.pm.lastSync=Date.now();
     saveData(DB); renderView('pm');
@@ -2523,8 +2524,8 @@ function openPMInfo(id){
   const meta=((DB.pm&&DB.pm.meta)||{})[id]||{};
   document.getElementById('pmi-invoice').value=id;
   document.getElementById('pmi-label').textContent=e?(e.partner+' · '+e.invoice):id;
-  document.getElementById('pmi-machine').value=meta.machine||'';
-  document.getElementById('pmi-sales').value=meta.sales||'';
+  const mEl=document.getElementById('pmi-machine'); mEl.value=meta.machine||''; mEl.placeholder = (e&&e.machine)?('Odoo: '+e.machine):'mis. HD 6/15, K5 Premium';
+  const sEl=document.getElementById('pmi-sales'); sEl.value=meta.sales||''; sEl.placeholder = (e&&e.salesman)?('Odoo: '+e.salesman):'Nama salesman';
   const metas=Object.values((DB.pm&&DB.pm.meta)||{});
   const machines=[...new Set(metas.map(m=>m.machine).filter(Boolean))].sort();
   const sales=[...new Set([...metas.map(m=>m.sales).filter(Boolean), ...getSalesManagers().map(m=>m.name)])].sort();
