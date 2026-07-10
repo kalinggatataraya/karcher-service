@@ -1105,8 +1105,12 @@ const CLOUD_API = 'https://api.jsonbin.io/v3/b';
 const EMAIL_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/send-reminder';
 const EMAIL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
 const PM_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-pm-eligible';
-const cloudIsConfigured = () => CLOUD.BIN_ID && CLOUD.API_KEY 
-  && !CLOUD.BIN_ID.includes('PASTE') && !CLOUD.API_KEY.includes('PASTE');
+// ── Primary cloud store: Supabase Postgres (jsonb). JSONBin kept as read-only fallback for one-time migration. ──
+const SUPA_STATE = 'https://uhdrvpcegpcibxxvubyb.supabase.co/rest/v1/ksc_state';
+const STATE_ID = 'main';
+function supaHeaders(){ return { 'apikey': EMAIL_ANON_KEY, 'Authorization': 'Bearer ' + EMAIL_ANON_KEY }; }
+function _hasData(d){ return !!(d && ((Array.isArray(d.tickets)&&d.tickets.length)||(Array.isArray(d.trials)&&d.trials.length)||(Array.isArray(d.visits)&&d.visits.length)||(d.pm&&Array.isArray(d.pm.entitlements)&&d.pm.entitlements.length))); }
+const cloudIsConfigured = () => true;
 
 let _syncEl = null;
 function setSyncStatus(state, msg) {
@@ -1124,35 +1128,36 @@ function setSyncStatus(state, msg) {
 }
 
 async function cloudLoad() {
-  if (!cloudIsConfigured()) return null;
+  // Primary: Supabase
   try {
-    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': CLOUD.API_KEY, 'X-Bin-Meta': 'false' }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    // JSONBin wraps result, but with X-Bin-Meta:false it returns the raw record
-    return data;
-  } catch (e) {
-    console.error('[Cloud] Load failed:', e);
-    return null;
-  }
+    const res = await fetch(`${SUPA_STATE}?id=eq.${STATE_ID}&select=data`, { headers: supaHeaders() });
+    if (res.ok) {
+      const rows = await res.json();
+      const d = (rows && rows[0]) ? rows[0].data : null;
+      if (_hasData(d)) return d;
+    } else {
+      console.error('[Supa] load HTTP', res.status);
+    }
+  } catch (e) { console.error('[Supa] load failed:', e); }
+  // Fallback: legacy JSONBin (read-only, migrates old data on first load)
+  try {
+    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}/latest`, { headers: { 'X-Master-Key': CLOUD.API_KEY, 'X-Bin-Meta': 'false' } });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return null;
 }
 
 async function cloudSave(data) {
-  if (!cloudIsConfigured()) return false;
   try {
-    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': CLOUD.API_KEY
-      },
-      body: JSON.stringify(data)
+    const res = await fetch(`${SUPA_STATE}?on_conflict=id`, {
+      method: 'POST',
+      headers: { ...supaHeaders(), 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: STATE_ID, data, updated_at: new Date().toISOString() })
     });
+    if (!res.ok) console.error('[Supa] save HTTP', res.status, await res.text().catch(()=>'') );
     return res.ok;
   } catch (e) {
-    console.error('[Cloud] Save failed:', e);
+    console.error('[Supa] save failed:', e);
     return false;
   }
 }
