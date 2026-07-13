@@ -1149,13 +1149,24 @@ async function cloudLoad() {
 
 async function cloudSave(data) {
   try {
+    // Always merge onto the freshest server copy so we never clobber other computers.
+    let payload = data;
+    try {
+      const fresh = await cloudLoad();
+      if (fresh && _baseline) payload = mergeDB(_baseline, data, normalizeDB(fresh));
+    } catch (e) { console.error('[Supa] merge skipped:', e); }
+
     const res = await fetch(`${SUPA_STATE}?on_conflict=id`, {
       method: 'POST',
       headers: { ...supaHeaders(), 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id: STATE_ID, data, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ id: STATE_ID, data: payload, updated_at: new Date().toISOString() })
     });
-    if (!res.ok) console.error('[Supa] save HTTP', res.status, await res.text().catch(()=>'') );
-    return res.ok;
+    if (!res.ok) { console.error('[Supa] save HTTP', res.status, await res.text().catch(()=>'')); return false; }
+
+    DB = normalizeDB(payload);
+    _baseline = _clone(DB);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); } catch (e) {}
+    return true;
   } catch (e) {
     console.error('[Supa] save failed:', e);
     return false;
@@ -1170,7 +1181,7 @@ function cloudSaveDebounced(data) {
   _saveTimer = setTimeout(async () => {
     const ok = await cloudSave(data);
     setSyncStatus(ok ? 'synced' : 'error');
-  }, 1200);
+  }, 400);
 }
 
 // Pull latest data from cloud → update DB → re-render current view
@@ -1194,6 +1205,7 @@ async function cloudRefresh(silent) {
   // Cloud has actual data → pull from cloud (cloud is source of truth)
   if (cloudHasData) {
     DB = normalizeDB(cloudData);
+    _baseline = _clone(DB);
     localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     setSyncStatus('synced');
     return true;
@@ -1246,8 +1258,55 @@ function defaultData() {
   };
 }
 
+// ── 3-way merge: apply MY changes (baseline -> current) on top of the LATEST server copy.
+// Prevents one computer from overwriting another's edits.
+function _clone(o){ try{ return JSON.parse(JSON.stringify(o||{})); }catch(e){ return {}; } }
+function _byId(arr,key){ const m=new Map(); (arr||[]).forEach(x=>{ if(x&&x[key]!=null) m.set(String(x[key]),x); }); return m; }
+function _mergeArr(base,cur,fresh,key){
+  const B=_byId(base,key), C=_byId(cur,key), F=_byId(fresh,key);
+  const out=new Map(F);
+  for(const k of B.keys()){ if(!C.has(k)) out.delete(k); }            // I deleted it
+  for(const [k,v] of C){
+    const b=B.get(k);
+    if(!b || JSON.stringify(b)!==JSON.stringify(v)) out.set(k,v);     // I added/changed it
+    else if(!out.has(k)) out.set(k,v);
+  }
+  return [...out.values()];
+}
+function _mergeObj(base,cur,fresh){
+  const B=base||{}, C=cur||{}, F=fresh||{};
+  const out=_clone(F);
+  for(const k of Object.keys(B)){ if(!(k in C)) delete out[k]; }      // I deleted it
+  for(const k of Object.keys(C)){
+    const same=(k in B) && JSON.stringify(B[k])===JSON.stringify(C[k]);
+    if(!same) out[k]=C[k];                                            // I added/changed it
+    else if(!(k in out)) out[k]=C[k];
+  }
+  return out;
+}
+function mergeDB(base,cur,fresh){
+  base=base||{}; cur=cur||{}; fresh=fresh||{};
+  const out=_clone(fresh);
+  out.tickets     = _mergeArr(base.tickets,cur.tickets,fresh.tickets,'id');
+  out.visits      = _mergeArr(base.visits,cur.visits,fresh.visits,'id');
+  out.technicians = _mergeArr(base.technicians,cur.technicians,fresh.technicians,'id');
+  out.trials      = _mergeArr(base.trials,cur.trials,fresh.trials,'id');
+  out.settings    = _mergeObj(base.settings,cur.settings,fresh.settings);
+  const bp=base.pm||{}, cp=cur.pm||{}, fp=fresh.pm||{};
+  out.pm = _clone(fp);
+  out.pm.entitlements = _mergeArr(bp.entitlements,cp.entitlements,fp.entitlements,'invoiceId');
+  out.pm.meta      = _mergeObj(bp.meta,cp.meta,fp.meta);
+  out.pm.cancelled = _mergeObj(bp.cancelled,cp.cancelled,fp.cancelled);
+  out.pm.visits    = _mergeObj(bp.visits,cp.visits,fp.visits);
+  ['lastSync','detectedCategories','salesmanField'].forEach(k=>{
+    if(JSON.stringify(bp[k])!==JSON.stringify(cp[k])) out.pm[k]=cp[k];
+    else if(!(k in out.pm) && (k in cp)) out.pm[k]=cp[k];
+  });
+  return out;
+}
 function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
 let DB = normalizeDB(loadData());
+let _baseline = _clone(DB);
 
 // ═══════════════════════════════════════════════
 // PAGE ROUTING
@@ -1377,6 +1436,7 @@ async function trackTicket() {
 // VIEWS
 // ═══════════════════════════════════════════════
 function renderView(view) {
+  window.currentView = view;
   const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
@@ -2579,6 +2639,18 @@ function savePMSettings(){
   s.pmThreshold=th>0?th:15000000; s.pmMonthsBack=mb>0?mb:24;
   saveData(DB); renderView('settings'); toast('Pengaturan PM disimpan','ok');
 }
+
+// ─── AUTO-REFRESH (multi-computer) ───
+async function autoRefresh(){
+  if (document.hidden) return;
+  const admin = document.getElementById('pg-admin');
+  if (!admin || !admin.classList.contains('active')) return;
+  if (document.querySelector('.modal-bg.open')) return;   // jangan ganggu saat sedang mengisi form
+  const ok = await cloudRefresh(true);
+  if (ok && window.currentView) renderView(window.currentView);
+}
+setInterval(autoRefresh, 30000);
+window.addEventListener('focus', autoRefresh);
 
 // ─── HIDDEN STAFF ACCESS ───
 // Customer tidak melihat tombol login. Staff hanya bisa akses via:
