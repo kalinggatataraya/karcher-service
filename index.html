@@ -673,6 +673,7 @@ textarea { resize: vertical; min-height: 80px; }
         </div>
       </div>
       <div id="sync-status" style="font-size:11px;color:var(--t3);padding:6px 10px;text-align:center;border-top:1px solid var(--b1);margin-top:4px">⚪ <span style="color:var(--t3);font-size:11px">Offline (local)</span></div>
+      <div id="app-ver" style="font-size:9px;color:var(--t3);text-align:center;padding:0 0 4px"></div>
       <button class="nav-item" style="color:var(--red);margin-top:4px" onclick="doLogout()">
         <span class="ico">🚪</span> Logout
       </button>
@@ -1268,8 +1269,15 @@ function _mergeArr(base,cur,fresh,key){
   for(const k of B.keys()){ if(!C.has(k)) out.delete(k); }            // I deleted it
   for(const [k,v] of C){
     const b=B.get(k);
-    if(!b || JSON.stringify(b)!==JSON.stringify(v)) out.set(k,v);     // I added/changed it
-    else if(!out.has(k)) out.set(k,v);
+    if(!b){                                                            // new on this computer
+      if(out.has(k) && JSON.stringify(out.get(k))!==JSON.stringify(v)){
+        let nk=String(k)+'-'+Math.random().toString(36).slice(2,5), i=2; // same id used elsewhere -> keep both
+        while(out.has(nk)){ nk=String(k)+'-'+(i++); }
+        const nv=_clone(v); nv[key]=nk; out.set(nk,nv);
+      } else out.set(k,v);
+    } else if(JSON.stringify(b)!==JSON.stringify(v)){
+      out.set(k,v);                                                    // edited on this computer
+    } else if(!out.has(k)) out.set(k,v);
   }
   return [...out.values()];
 }
@@ -1307,6 +1315,15 @@ function mergeDB(base,cur,fresh){
 function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
 let DB = normalizeDB(loadData());
 let _baseline = _clone(DB);
+const APP_VERSION = '2026-07-16-supabase-merge';
+// Collision-safe sequential id: max existing number for this year + 1
+function nextSeq(prefix, arr, pad){
+  const y = new Date().getFullYear();
+  const re = new RegExp('^'+prefix+'-'+y+'-(\\d+)');
+  let max = 0;
+  (arr||[]).forEach(x=>{ const m=String((x&&x.id)||'').match(re); if(m){ const n=parseInt(m[1],10); if(n>max) max=n; } });
+  return prefix+'-'+y+'-'+String(max+1).padStart(pad||3,'0');
+}
 
 // ═══════════════════════════════════════════════
 // PAGE ROUTING
@@ -1848,7 +1865,7 @@ function saveVisit() {
   const address  = document.getElementById('v-address').value.trim();
   const desc     = document.getElementById('v-desc').value.trim();
   if (!customer || !address || !desc) { toast('Fill required fields', 'err'); return; }
-  const id = 'VST-' + new Date().getFullYear() + '-' + String(DB.visits.length+1).padStart(3,'0');
+  const id = nextSeq('VST', DB.visits, 3);
   DB.visits.push({ id, customer, phone:document.getElementById('v-phone').value.trim(), address, machine:document.getElementById('v-machine').value.trim(), desc, date:document.getElementById('v-date').value, time:document.getElementById('v-time').value, tech:document.getElementById('v-tech').value, type:document.getElementById('v-type').value, notes:document.getElementById('v-notes').value.trim(), status:'scheduled', createdAt:Date.now() });
   saveData(DB); closeModal('modal-visit'); renderView('site-visits'); toast('Visit scheduled: '+id,'ok');
 }
@@ -2016,9 +2033,7 @@ function globalSearch(q) {
 // HELPERS
 // ═══════════════════════════════════════════════
 function newTicketId() {
-  const y = new Date().getFullYear();
-  const n = String(DB.tickets.filter(t=>t.id.includes(y)).length+1).padStart(4,'0');
-  return `SVC-${y}-${n}`;
+  return nextSeq('SVC', DB.tickets, 4);
 }
 
 function populateTechSelect(selectId, current='', keepEmpty=false) {
@@ -2159,7 +2174,7 @@ async function submitTrial(){
   base=normalizeDB(base);
   const now=Date.now();
   const y=new Date().getFullYear();
-  const id=`TRL-${y}-`+String(base.trials.filter(t=>String(t.id).includes('TRL-'+y)).length+1).padStart(3,'0');
+  const id=nextSeq('TRL', base.trials, 3);
   const tr={ id, company, pic, phone, email, machineType:machine, qty:g('tr-qty')||'1', address:g('tr-address'), startDate:g('tr-start'), duration:g('tr-duration')||'', salesName, managerName:manager?manager.name:'', managerEmail:manager?manager.email:'', notes:g('tr-notes'), status:'pending', createdAt:now, updatedAt:now, history:[{ts:now,action:'Pengajuan dibuat',by:salesName,note:'Diajukan via form publik'}] };
   tr.token = (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
   base.trials.push(tr);
@@ -2674,6 +2689,7 @@ async function manualRefresh() {
 
 // ─── INIT ───
 window.addEventListener('DOMContentLoaded', async () => {
+  try{ console.log('KSC app version', APP_VERSION); const _v=document.getElementById('app-ver'); if(_v) _v.textContent='v '+APP_VERSION; }catch(e){}
   // Trial approval deep-link (Sales Manager approves via email, no login)
   const _ap = parseTrialHash();
   if (_ap) { openApprovalPage(_ap.id, _ap.token); return; }
