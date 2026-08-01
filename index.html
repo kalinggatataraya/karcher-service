@@ -656,6 +656,7 @@ textarea { resize: vertical; min-height: 80px; }
     <button class="nav-item" onclick="goView('pm',this)"><span class="ico">🛡️</span> Preventive Maint. <span id="pm-badge" class="trial-badge" style="display:none"></span></button>
 
     <div class="sb-section">Team</div>
+    <button class="nav-item" onclick="goView('tech-schedule',this)"><span class="ico">🗓️</span> Jadwal Teknisi</button>
     <button class="nav-item" onclick="goView('productivity',this)"><span class="ico">📈</span> Productivity</button>
     <button class="nav-item" onclick="goView('technicians',this)"><span class="ico">👷</span> Technicians</button>
     <button class="nav-item" onclick="goView('settings',this)"><span class="ico">⚙️</span> Settings</button>
@@ -727,6 +728,10 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
       <div class="f-row"><div class="f-label">Problem Description *</div><textarea id="f-problem" placeholder="Describe the issue the customer reported…"></textarea></div>
       <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Jadwal Kerja Workshop</div><input type="date" id="f-sched-date" onchange="renderSuggest('f')"/></div>
+        <div class="f-row"><div class="f-label">Jam Mulai</div><input type="time" id="f-sched-time" value="08:00"/></div>
+      </div>
+      <div class="f-grid2">
         <div class="f-row"><div class="f-label">Assign Technician</div>
           <select id="f-tech">
             <option value="">— Unassigned —</option>
@@ -740,6 +745,7 @@ textarea { resize: vertical; min-height: 80px; }
           </select>
         </div>
       </div>
+      <div id="f-suggest" style="background:var(--b1);border:1px solid var(--b2);border-radius:var(--r);padding:11px 13px;margin-bottom:12px"></div>
       <div class="f-row"><div class="f-label">Internal Notes</div><textarea id="f-notes" placeholder="Notes for technician (not visible to customer)…" style="min-height:60px"></textarea></div>
       <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(visible to customer)</span></div><input type="date" id="f-eta"/></div>
     </div>
@@ -799,9 +805,10 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="f-row"><div class="f-label">Machine / Equipment</div><input type="text" id="v-machine" placeholder="Machine model or description"/></div>
       <div class="f-row"><div class="f-label">Job Description *</div><textarea id="v-desc" placeholder="What needs to be done on-site…"></textarea></div>
       <div class="f-grid2">
-        <div class="f-row"><div class="f-label">Visit Date</div><input type="date" id="v-date"/></div>
+        <div class="f-row"><div class="f-label">Visit Date</div><input type="date" id="v-date" onchange="renderSuggest('v')"/></div>
         <div class="f-row"><div class="f-label">Scheduled Time</div><input type="time" id="v-time" value="09:00"/></div>
       </div>
+      <div id="v-suggest" style="background:var(--b1);border:1px solid var(--b2);border-radius:var(--r);padding:11px 13px;margin-bottom:12px"></div>
       <div class="f-grid2">
         <div class="f-row"><div class="f-label">Assign Technician</div><select id="v-tech"><option value="">— Unassigned —</option></select></div>
         <div class="f-row"><div class="f-label">Visit Type</div>
@@ -1454,9 +1461,19 @@ async function trackTicket() {
 // ═══════════════════════════════════════════════
 function renderView(view) {
   window.currentView = view;
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
+
+  // Simpan fokus + posisi kursor sebelum DOM dibangun ulang.
+  // Tanpa ini, mengetik di kotak pencarian dalam view (mis. PM) akan
+  // "terlempar keluar" setiap kali view di-render ulang.
+  const ae = document.activeElement;
+  let focusSnap = null;
+  if (ae && ae.id && c.contains(ae) && ['INPUT','TEXTAREA','SELECT'].includes(ae.tagName)) {
+    focusSnap = { id: ae.id, start: ae.selectionStart, end: ae.selectionEnd, scroll: c.scrollTop };
+  }
+
   c.innerHTML = '';
   if (view==='dashboard') c.innerHTML = viewDashboard();
   else if (view==='tickets') c.innerHTML = viewTickets();
@@ -1467,7 +1484,19 @@ function renderView(view) {
   else if (view==='technicians') c.innerHTML = viewTechnicians();
   else if (view==='trials') c.innerHTML = viewTrials();
   else if (view==='pm') c.innerHTML = viewPM();
+  else if (view==='tech-schedule') c.innerHTML = viewTechSchedule();
   else if (view==='settings') c.innerHTML = viewSettings();
+
+  // Kembalikan fokus & kursor ke tempat semula
+  if (focusSnap) {
+    const el = document.getElementById(focusSnap.id);
+    if (el) {
+      el.focus({ preventScroll:true });
+      try { if (focusSnap.start != null) el.setSelectionRange(focusSnap.start, focusSnap.end); } catch(e) {}
+      c.scrollTop = focusSnap.scroll;
+    }
+  }
+
   updateTrialBadge();
   updatePMBadge();
 }
@@ -1554,17 +1583,37 @@ function viewDashboard() {
 // ─── TICKETS ───
 let ticketFilter = 'all';
 let ticketSort = 'updated_desc';
+let ticketSearch = '';
 function viewTickets(filter) {
   if (filter) ticketFilter = filter;
   const filters = [{k:'all',l:'All'},{k:'received',l:'Received'},{k:'diagnosing',l:'Diagnosing'},{k:'repairing',l:'Repairing'},{k:'testing',l:'Testing'},{k:'done',l:'Ready'},{k:'delivered',l:'Delivered'}];
   let tickets = [...DB.tickets];
+  // Pencarian: cocokkan ID, customer, mesin, telepon, teknisi, serial
+  const sq = (ticketSearch||'').trim().toLowerCase();
+  if (sq) {
+    tickets = tickets.filter(t =>
+      String(t.id||'').toLowerCase().includes(sq) ||
+      String(t.customer||'').toLowerCase().includes(sq) ||
+      String(t.machine||'').toLowerCase().includes(sq) ||
+      String(t.phone||'').toLowerCase().includes(sq) ||
+      String(t.tech||'').toLowerCase().includes(sq) ||
+      String(t.serial||'').toLowerCase().includes(sq) ||
+      String(t.mactype||'').toLowerCase().includes(sq)
+    );
+  }
   if (ticketFilter !== 'all') tickets = tickets.filter(t => t.status === ticketFilter);
   if (ticketSort==='created_asc') tickets.sort((a,b)=>a.createdAt-b.createdAt);
   else if (ticketSort==='created_desc') tickets.sort((a,b)=>b.createdAt-a.createdAt);
   else tickets.sort((a,b)=>b.updatedAt-a.updatedAt);
   const sortOpts=[['updated_desc','Terbaru diperbarui'],['created_desc','Terbaru dibuat'],['created_asc','Terlama → terbaru']];
   const selStyle="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:6px 10px;outline:none;margin-right:8px";
+  const searchBanner = sq ? `
+  <div style="display:flex;align-items:center;gap:10px;background:var(--yd);border:1px solid var(--yd2);border-radius:var(--r);padding:9px 14px;margin-bottom:12px">
+    <span style="font-size:13px;color:var(--t1)">🔍 Hasil pencarian untuk <b style="color:var(--y)">"${esc(ticketSearch)}"</b> — <b>${tickets.length}</b> ticket ditemukan${ticketFilter!=='all'?` <span style="color:var(--t3)">(difilter: ${esc(ticketFilter)})</span>`:''}</span>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="clearTicketSearch()">✕ Hapus pencarian</button>
+  </div>` : '';
   return `
+  ${searchBanner}
   <div class="filter-row">
     ${filters.map(f=>`<div class="filter-chip ${ticketFilter===f.k?'on':''}" onclick="ticketFilter='${f.k}';renderView('tickets')">${f.l} ${f.k==='all'?'('+DB.tickets.length+')':''}</div>`).join('')}
     <div class="sep"></div>
@@ -1590,7 +1639,9 @@ function viewTickets(filter) {
             <button class="btn btn-sm btn-red" onclick="deleteTicket('${t.id}')">Del</button>
           </div>
         </td>
-      </tr>`).join('') : `<tr><td colspan="8" class="empty-row">No tickets found.</td></tr>`}</tbody>
+      </tr>`).join('') : `<tr><td colspan="8" class="empty-row">${sq
+        ? `Tidak ada ticket yang cocok dengan <b>"${esc(ticketSearch)}"</b>${ticketFilter!=='all'?` pada filter <b>${esc(ticketFilter)}</b>`:''}.<br><span style="font-size:12px;color:var(--t3)">Coba kata kunci lain${ticketFilter!=='all'?', atau pilih filter <b>All</b>':''}.</span>`
+        : 'No tickets found.'}</td></tr>`}</tbody>
     </table>
   </div>`;
 }
@@ -1754,8 +1805,11 @@ function openNewTicket() {
   document.getElementById('f-mactype').value='Pressure Washer';
   document.getElementById('f-priority').value='normal';
   document.getElementById('f-problem').value='';
+  document.getElementById('f-sched-date').value = todayStr();
+  document.getElementById('f-sched-time').value = '08:00';
   populateTechSelect('f-tech');
   openModal('modal-ticket');
+  renderSuggest('f');
 }
 
 function openEditTicket(id) {
@@ -1773,8 +1827,11 @@ function openEditTicket(id) {
   document.getElementById('f-priority').value = t.priority;
   document.getElementById('f-notes').value = t.notes;
   document.getElementById('f-eta').value = t.etaDate || '';
+  document.getElementById('f-sched-date').value = t.schedDate || '';
+  document.getElementById('f-sched-time').value = t.schedTime || '08:00';
   populateTechSelect('f-tech', t.tech);
   openModal('modal-ticket');
+  renderSuggest('f');
 }
 
 function saveTicket() {
@@ -1784,11 +1841,23 @@ function saveTicket() {
   if (!customer || !machine || !problem) { toast('Fill required fields', 'err'); return; }
 
   const etaDate = document.getElementById('f-eta').value;
+  const schedDate = (document.getElementById('f-sched-date')||{}).value || '';
+  const schedTime = (document.getElementById('f-sched-time')||{}).value || '';
+
+  // Peringatkan kalau teknisi sudah melewati kapasitas harian
+  const pickedTech = document.getElementById('f-tech').value;
+  if (pickedTech && schedDate) {
+    const existing = techDayJobs(pickedTech, schedDate).filter(j => j.id !== editingTicketId).length;
+    if (existing >= SCHED.CAP) {
+      const ok = confirm(`${pickedTech} sudah punya ${existing} job pada ${fmtDateOnly(schedDate)} (kapasitas ${SCHED.CAP}).\n\nTetap tugaskan?`);
+      if (!ok) return;
+    }
+  }
 
   if (editingTicketId) {
     const t = DB.tickets.find(x=>x.id===editingTicketId);
     const oldEta = t.etaDate;
-    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, updatedAt:Date.now() });
+    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, schedDate, schedTime, updatedAt:Date.now() });
     // Log ETA change in history kalau berubah
     if (etaDate && etaDate !== oldEta) {
       t.history.push({ ts:Date.now(), action:'ETA Updated', note:'Estimated completion date set to ' + fmtDateOnly(etaDate), tech:'Admin' });
@@ -1796,7 +1865,7 @@ function saveTicket() {
     toast('Ticket updated', 'ok');
   } else {
     const id = newTicketId();
-    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
+    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, schedDate, schedTime, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
     toast('Ticket created: ' + id, 'ok');
   }
   saveData(DB);
@@ -1858,6 +1927,7 @@ function openNewVisit() {
   document.getElementById('v-time').value = '09:00';
   populateTechSelect('v-tech');
   openModal('modal-visit');
+  renderSuggest('v');
 }
 
 function saveVisit() {
@@ -1865,6 +1935,19 @@ function saveVisit() {
   const address  = document.getElementById('v-address').value.trim();
   const desc     = document.getElementById('v-desc').value.trim();
   if (!customer || !address || !desc) { toast('Fill required fields', 'err'); return; }
+
+  const vDate = document.getElementById('v-date').value;
+  const vTech = document.getElementById('v-tech').value;
+  if (vTech && vDate) {
+    const existing = techLoad(vTech, vDate);
+    if (existing >= SCHED.CAP) {
+      if (!confirm(`${vTech} sudah punya ${existing} job pada ${fmtDateOnly(vDate)} (kapasitas ${SCHED.CAP}).\n\nTetap jadwalkan?`)) return;
+    }
+  }
+  if (vDate && !isWorkday(vDate)) {
+    if (!confirm(`${fmtDateOnly(vDate)} jatuh pada hari ${dayName(vDate)} — di luar hari kerja (Senin–Jumat).\n\nTetap jadwalkan?`)) return;
+  }
+
   const id = nextSeq('VST', DB.visits, 3);
   DB.visits.push({ id, customer, phone:document.getElementById('v-phone').value.trim(), address, machine:document.getElementById('v-machine').value.trim(), desc, date:document.getElementById('v-date').value, time:document.getElementById('v-time').value, tech:document.getElementById('v-tech').value, type:document.getElementById('v-type').value, notes:document.getElementById('v-notes').value.trim(), status:'scheduled', createdAt:Date.now() });
   saveData(DB); closeModal('modal-visit'); renderView('site-visits'); toast('Visit scheduled: '+id,'ok');
@@ -2023,10 +2106,37 @@ function deleteUser(username) {
 // ═══════════════════════════════════════════════
 // SEARCH
 // ═══════════════════════════════════════════════
+// Sorot menu sidebar sesuai view aktif (tanpa perlu klik)
+function highlightNav(view) {
+  const items = document.querySelectorAll('.nav-item');
+  items.forEach(n => {
+    const oc = n.getAttribute('onclick') || '';
+    if (oc.includes(`'${view}'`)) n.classList.add('on');
+    else n.classList.remove('on');
+  });
+}
+
+// Pencarian global — di-debounce, hasil ditampilkan di view Service Tickets
 function globalSearch(q) {
-  if (!q.trim()) return;
-  const r = DB.tickets.filter(t=>t.id.includes(q.toUpperCase())||t.customer.toLowerCase().includes(q.toLowerCase())||t.machine.toLowerCase().includes(q.toLowerCase()));
-  if (r.length>0) { DB._searchResults=r; renderView('tickets'); }
+  ticketSearch = q || '';
+  clearTimeout(window._gsTimer);
+  window._gsTimer = setTimeout(() => {
+    // Selalu tampilkan di view tickets supaya hasil terlihat
+    if (window.currentView !== 'tickets') {
+      renderView('tickets');
+      highlightNav('tickets');
+    } else {
+      renderView('tickets');
+    }
+  }, 250);
+}
+
+// Bersihkan pencarian dan kembalikan daftar penuh
+function clearTicketSearch() {
+  ticketSearch = '';
+  const box = document.getElementById('global-search');
+  if (box) box.value = '';
+  renderView('tickets');
 }
 
 // ═══════════════════════════════════════════════
@@ -2545,7 +2655,7 @@ function viewPM(){
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('overdue','Terlambat')}${tab('due','Jatuh Tempo')}${tab('active','Berjalan')}${tab('completed','Selesai')}${tab('cancelled','Dibatalkan')}${tab('expired','Kadaluarsa')}</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-    <input type="text" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none"/>
+    <input type="text" id="pm-search" placeholder="Cari customer / invoice…" value="${esc(DB._pmSearch||'')}" oninput="DB._pmSearch=this.value;clearTimeout(window._pmST);window._pmST=setTimeout(()=>renderView('pm'),350)" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none"/>
     <span style="font-size:12px;color:var(--t3)">Ditandai oleh:</span>
     <select onchange="DB._pmBy=this.value;renderView('pm')" style="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:7px 10px;outline:none">
       <option value="all" ${byF==='all'?'selected':''}>Semua</option>
@@ -2655,12 +2765,314 @@ function savePMSettings(){
   saveData(DB); renderView('settings'); toast('Pengaturan PM disimpan','ok');
 }
 
+// ═══════════════════════════════════════════════
+// PENJADWALAN TEKNISI
+// Kapasitas 4 job/hari · Senin–Jumat · 08:00–17:00
+// Menghitung: workshop ticket + site visit + preventive maintenance
+// ═══════════════════════════════════════════════
+const SCHED = { CAP: 4, MODERATE: 3, DAY_START: '08:00', DAY_END: '17:00' };
+
+function isWorkday(dateStr){
+  if(!dateStr) return false;
+  const d = new Date(String(dateStr).slice(0,10)+'T00:00:00');
+  if (isNaN(d)) return false;
+  const w = d.getDay();          // 0=Minggu, 6=Sabtu
+  return w >= 1 && w <= 5;
+}
+function dayName(dateStr){
+  const d = new Date(String(dateStr).slice(0,10)+'T00:00:00');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('id-ID',{weekday:'long'});
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function addDaysStr(dateStr, n){
+  const d = new Date(String(dateStr).slice(0,10)+'T00:00:00');
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+
+// Kumpulkan SEMUA job seorang teknisi pada tanggal tertentu, dari 3 sumber
+function techDayJobs(techName, dateStr){
+  if(!techName || !dateStr) return [];
+  const jobs = [];
+
+  // 1) Site visit (luar)
+  (DB.visits||[]).forEach(v => {
+    if (v.tech === techName && v.date === dateStr && v.status !== 'cancelled') {
+      jobs.push({
+        kind:'visit', icon:'🚐', id:v.id,
+        title:v.customer, sub:v.desc || v.machine || '',
+        time:v.time || '', place:v.address || '',
+        status:v.status, tone:'#5ab4ff'
+      });
+    }
+  });
+
+  // 2) Preventive maintenance (luar)
+  const pmVis = (DB.pm && DB.pm.visits) || {};
+  Object.keys(pmVis).forEach(invId => {
+    (pmVis[invId]||[]).forEach(v => {
+      if (v.by === techName && v.date === dateStr) {
+        const ent = ((DB.pm&&DB.pm.entitlements)||[]).find(e => String(e.invoiceId) === String(invId));
+        jobs.push({
+          kind:'pm', icon:'🛡️', id: ent ? ent.invoice : invId,
+          title: ent ? ent.partner : 'PM',
+          sub: v.note || 'Preventive maintenance',
+          time: v.time || '', place:'',
+          status:'completed', tone:'#3ecf8e'
+        });
+      }
+    });
+  });
+
+  // 3) Workshop ticket (dalam) — pakai tanggal jadwal kerja
+  (DB.tickets||[]).forEach(t => {
+    if (t.tech === techName && t.schedDate === dateStr && t.status !== 'delivered' && t.status !== 'drop') {
+      jobs.push({
+        kind:'ticket', icon:'🔧', id:t.id,
+        title:t.customer, sub:t.machine || '',
+        time:t.schedTime || '', place:'Workshop',
+        status:t.status, tone:'#FFD700'
+      });
+    }
+  });
+
+  jobs.sort((a,b) => (a.time||'99:99').localeCompare(b.time||'99:99'));
+  return jobs;
+}
+
+function techLoad(techName, dateStr){ return techDayJobs(techName, dateStr).length; }
+
+// Status beban → warna & label
+function loadTone(n){
+  if (n >= SCHED.CAP + 1) return { key:'over',  label:'Overload', col:'#ff5a5a', dot:'⛔' };
+  if (n >= SCHED.CAP)     return { key:'full',  label:'Penuh',    col:'#ff5a5a', dot:'🔴' };
+  if (n >= 2)             return { key:'mod',   label:'Sedang',   col:'#f59e0b', dot:'🟡' };
+  return                       { key:'free',  label:'Longgar',  col:'#3ecf8e', dot:'🟢' };
+}
+
+// Pernahkah teknisi ini menangani customer tsb sebelumnya?
+function techHandledCustomer(techName, customer){
+  if(!techName || !customer) return false;
+  const c = String(customer).toLowerCase().trim();
+  if(!c) return false;
+  const hitTicket = (DB.tickets||[]).some(t => t.tech===techName && String(t.customer||'').toLowerCase().trim()===c);
+  if (hitTicket) return true;
+  return (DB.visits||[]).some(v => v.tech===techName && String(v.customer||'').toLowerCase().trim()===c);
+}
+
+// Apakah teknisi sudah punya job di area yang sama hari itu? (efisiensi rute)
+function techSameArea(techName, dateStr, address){
+  if(!address) return false;
+  const words = String(address).toLowerCase().split(/[\s,.\-\/]+/).filter(w => w.length >= 4);
+  if(!words.length) return false;
+  return techDayJobs(techName, dateStr).some(j => {
+    const p = String(j.place||'').toLowerCase();
+    return p && words.some(w => p.includes(w));
+  });
+}
+
+// Mesin saran: urutkan teknisi untuk tanggal & konteks tertentu
+function suggestTech(dateStr, customer, address){
+  const techs = DB.technicians || [];
+  const scored = techs.map(t => {
+    const load = techLoad(t.name, dateStr);
+    const tone = loadTone(load);
+    const known = techHandledCustomer(t.name, customer);
+    const near  = techSameArea(t.name, dateStr, address);
+
+    // Skor lebih kecil = lebih diprioritaskan
+    let score = load * 10;
+    if (known) score -= 4;   // sudah paham konteks customer
+    if (near)  score -= 3;   // hemat perjalanan
+    if (load >= SCHED.CAP) score += 100;  // penuh → dorong ke bawah
+
+    const why = [];
+    why.push(load === 0 ? 'kosong hari ini' : load + ' job hari ini');
+    if (known) why.push('pernah menangani customer ini');
+    if (near)  why.push('ada job di area yang sama');
+
+    return { tech:t, load, tone, known, near, score, why, full: load >= SCHED.CAP };
+  });
+  scored.sort((a,b) => a.score - b.score || a.tech.name.localeCompare(b.tech.name));
+  return scored;
+}
+
+// ── Panel saran di dalam modal ──
+// prefix 'f' = modal ticket, 'v' = modal visit
+function renderSuggest(prefix){
+  const box = document.getElementById(prefix+'-suggest');
+  if(!box) return;
+
+  const dateEl = document.getElementById(prefix === 'f' ? 'f-sched-date' : 'v-date');
+  const dateStr = dateEl ? dateEl.value : '';
+  if(!dateStr){
+    box.innerHTML = `<div style="font-size:12px;color:var(--t3)">Pilih tanggal jadwal dulu untuk melihat saran teknisi.</div>`;
+    return;
+  }
+  if(!isWorkday(dateStr)){
+    box.innerHTML = `<div style="font-size:12px;color:#f59e0b">⚠️ ${dayName(dateStr)} bukan hari kerja (Senin–Jumat). Saran teknisi tetap ditampilkan, tapi pastikan ini disengaja.</div>`;
+  }
+
+  const customer = (document.getElementById(prefix === 'f' ? 'f-customer' : 'v-customer')||{}).value || '';
+  const address  = prefix === 'v' ? ((document.getElementById('v-address')||{}).value || '') : '';
+  const ranked = suggestTech(dateStr, customer, address);
+  if(!ranked.length){
+    box.innerHTML = `<div style="font-size:12px;color:var(--t3)">Belum ada teknisi terdaftar.</div>`;
+    return;
+  }
+
+  const top = ranked[0];
+  const rest = ranked.slice(1);
+  const selectId = prefix === 'f' ? 'f-tech' : 'v-tech';
+  const warn = !isWorkday(dateStr) ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:6px">⚠️ ${dayName(dateStr)} — di luar hari kerja</div>` : '';
+
+  const topBlock = top.full
+    ? `<div style="font-size:12px;color:#ff5a5a">Semua teknisi sudah penuh (${SCHED.CAP} job) pada tanggal ini. Pertimbangkan tanggal lain.</div>`
+    : `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+         <div style="width:10px;height:10px;border-radius:50%;background:${top.tech.color||'#8892aa'};flex-shrink:0"></div>
+         <div style="min-width:0">
+           <div style="font-size:13px;font-weight:700;color:var(--t1)">${esc(top.tech.name)}</div>
+           <div style="font-size:11px;color:var(--t3)">${top.why.map(esc).join(' · ')}</div>
+         </div>
+         <button type="button" class="btn btn-sm btn-y" style="margin-left:auto" onclick="applySuggest('${selectId}','${esc(top.tech.name)}','${prefix}')">Terima</button>
+       </div>`;
+
+  const altRows = rest.map(r => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--b1)">
+      <span style="font-size:11px">${r.tone.dot}</span>
+      <span style="font-size:12px;color:var(--t1);min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.tech.name)}</span>
+      <span style="font-size:11px;color:${r.tone.col};white-space:nowrap">${r.load}/${SCHED.CAP} ${r.tone.label}</span>
+      <button type="button" class="btn btn-sm" onclick="applySuggest('${selectId}','${esc(r.tech.name)}','${prefix}')">Pilih</button>
+    </div>`).join('');
+
+  box.innerHTML = `
+    ${warn}
+    <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:6px">💡 Saran sistem</div>
+    ${topBlock}
+    ${rest.length ? `<div style="margin-top:8px"><div style="font-size:11px;color:var(--t3);margin-bottom:2px">Alternatif</div>${altRows}</div>` : ''}
+  `;
+}
+
+function applySuggest(selectId, name, prefix){
+  const sel = document.getElementById(selectId);
+  if(sel){
+    sel.value = name;
+    if (sel.value !== name) {   // opsi belum ada di list
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      sel.appendChild(o); sel.value = name;
+    }
+  }
+  toast('Teknisi dipilih: ' + name, 'ok');
+  if (prefix) renderSuggest(prefix);
+}
+
+// ─── VIEW: JADWAL TEKNISI ───
+function viewTechSchedule(){
+  if (!DB._schedDate) DB._schedDate = todayStr();
+  const date = DB._schedDate;
+  const techs = DB.technicians || [];
+
+  const totalJobs = techs.reduce((a,t) => a + techLoad(t.name, date), 0);
+  const capTotal  = techs.length * SCHED.CAP;
+  const freeSlots = Math.max(0, capTotal - totalJobs);
+  const overCount = techs.filter(t => techLoad(t.name, date) > SCHED.CAP).length;
+
+  // Job yang belum ada teknisinya pada tanggal ini
+  const unassigned = [];
+  (DB.visits||[]).forEach(v => { if(!v.tech && v.date===date && v.status!=='cancelled') unassigned.push({icon:'🚐', id:v.id, title:v.customer, sub:v.desc||''}); });
+  (DB.tickets||[]).forEach(t => { if(!t.tech && t.schedDate===date && t.status!=='delivered' && t.status!=='drop') unassigned.push({icon:'🔧', id:t.id, title:t.customer, sub:t.machine||''}); });
+
+  const nav = `
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <button class="btn btn-sm" onclick="DB._schedDate='${addDaysStr(date,-1)}';renderView('tech-schedule')">‹ Sebelumnya</button>
+    <input type="date" id="sched-date" value="${date}" onchange="DB._schedDate=this.value;renderView('tech-schedule')" style="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none"/>
+    <button class="btn btn-sm" onclick="DB._schedDate='${addDaysStr(date,1)}';renderView('tech-schedule')">Berikutnya ›</button>
+    <button class="btn btn-sm btn-y" onclick="DB._schedDate='${todayStr()}';renderView('tech-schedule')">Hari ini</button>
+    <div style="font-size:13px;color:var(--t2);margin-left:6px">${dayName(date)}, ${fmtDateOnly(date)}</div>
+    ${!isWorkday(date) ? `<span style="background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b55;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">Di luar hari kerja</span>` : ''}
+  </div>`;
+
+  const box = (label, val, col) => `
+    <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:13px;text-align:center">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:5px">${label}</div>
+      <div style="font-size:26px;font-weight:800;color:${col}">${val}</div>
+    </div>`;
+  const stats = `
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+    ${box('Total Job', totalJobs, 'var(--y)')}
+    ${box('Slot Tersisa', freeSlots, '#3ecf8e')}
+    ${box('Teknisi', techs.length, '#5ab4ff')}
+    ${box('Overload', overCount, overCount ? '#ff5a5a' : 'var(--t3)')}
+  </div>`;
+
+  const cards = techs.map(t => {
+    const jobs = techDayJobs(t.name, date);
+    const tone = loadTone(jobs.length);
+    const pct = Math.min(100, (jobs.length / SCHED.CAP) * 100);
+
+    const jobRows = jobs.length ? jobs.map(j => `
+      <div style="display:flex;align-items:center;gap:9px;background:var(--b1);border:1px solid var(--b2);border-left:3px solid ${j.tone};border-radius:6px;padding:7px 10px;margin-bottom:5px">
+        <span style="font-size:13px">${j.icon}</span>
+        <span class="mono" style="font-size:11px;color:var(--t3);min-width:42px">${j.time || '—:—'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.title)} <span style="color:var(--t3);font-weight:400">· ${esc(j.id)}</span></div>
+          <div style="font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.sub)}${j.place ? ' — ' + esc(j.place) : ''}</div>
+        </div>
+      </div>`).join('')
+      : `<div style="font-size:12px;color:var(--t3);padding:10px 0;text-align:center">Tidak ada job terjadwal</div>`;
+
+    return `
+    <div style="background:var(--b0);border:1px solid var(--b2);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:11px;height:11px;border-radius:50%;background:${t.color||'#8892aa'}"></div>
+        <div style="font-size:14px;font-weight:700;color:var(--t1)">${esc(t.name)}</div>
+        <span style="font-size:11px;color:var(--t3)">${esc(t.spec||'')}</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:${tone.col};font-weight:700">${tone.dot} ${jobs.length}/${SCHED.CAP} · ${tone.label}</span>
+        </div>
+      </div>
+      <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;width:${pct}%;background:${tone.col};transition:width .2s"></div>
+      </div>
+      ${jobRows}
+    </div>`;
+  }).join('');
+
+  const unassignedBlock = unassigned.length ? `
+    <div style="background:var(--b0);border:1px solid #f59e0b55;border-radius:var(--r);padding:13px 15px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:9px">⚠️ Belum ada teknisi (${unassigned.length})</div>
+      ${unassigned.map(u => `
+        <div style="display:flex;align-items:center;gap:9px;background:var(--b1);border:1px solid var(--b2);border-radius:6px;padding:7px 10px;margin-bottom:5px">
+          <span>${u.icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--t1)">${esc(u.title)} <span style="color:var(--t3);font-weight:400">· ${esc(u.id)}</span></div>
+            <div style="font-size:11px;color:var(--t3)">${esc(u.sub)}</div>
+          </div>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">
+      Kapasitas ${SCHED.CAP} job/hari per teknisi · Jam kerja ${SCHED.DAY_START}–${SCHED.DAY_END}, Senin–Jumat · Menghitung workshop ticket, site visit, dan preventive maintenance
+    </div>
+    ${nav}
+    ${stats}
+    ${unassignedBlock}
+    ${techs.length ? cards : `<div class="empty-row" style="text-align:center;color:var(--t3);padding:40px">Belum ada teknisi terdaftar. Tambahkan di menu <b>Technicians</b>.</div>`}
+  `;
+}
+
 // ─── AUTO-REFRESH (multi-computer) ───
 async function autoRefresh(){
   if (document.hidden) return;
   const admin = document.getElementById('pg-admin');
   if (!admin || !admin.classList.contains('active')) return;
   if (document.querySelector('.modal-bg.open')) return;   // jangan ganggu saat sedang mengisi form
+  // Jangan bangun ulang DOM saat admin sedang mengetik / memilih di dalam view
+  const ae = document.activeElement;
+  if (ae && ['INPUT','TEXTAREA','SELECT'].includes(ae.tagName)) return;
   const ok = await cloudRefresh(true);
   if (ok && window.currentView) renderView(window.currentView);
 }
@@ -2678,9 +3090,8 @@ async function manualRefresh() {
     // Re-render current admin view if visible
     const adminActive = document.getElementById('pg-admin').classList.contains('active');
     if (adminActive && typeof renderView === 'function') {
-      const titleEl = document.getElementById('view-title');
-      const t = (titleEl ? titleEl.textContent : 'dashboard').toLowerCase().replace(/\s/g,'-');
-      renderView(t === 'site-visits' ? 'site-visits' : t === 'tickets' ? 'tickets' : t === 'technicians' ? 'technicians' : t === 'trial-unit' ? 'trials' : t === 'settings' ? 'settings' : 'dashboard');
+      // Pertahankan view yang sedang dibuka — jangan pernah paksa balik ke dashboard
+      renderView(window.currentView || 'dashboard');
     }
   } else {
     toast('Cloud not configured or offline. Using local data.', 'err');
@@ -2734,7 +3145,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       // If admin view is currently active, re-render to show fresh data
       const adminActive = document.getElementById('pg-admin').classList.contains('active');
       if (adminActive && typeof renderView === 'function') {
-        renderView('dashboard');
+        renderView(window.currentView || 'dashboard');
       }
     }
   } else {
