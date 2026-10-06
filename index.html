@@ -562,7 +562,7 @@ textarea { resize: vertical; min-height: 80px; }
       <div id="login-form-area">
         <div class="login-field">
           <label>Username</label>
-          <input type="text" id="login-user" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"/>
+          <input type="text" id="login-user" placeholder="Email staff (mis. nama@tataraya.com)" autocomplete="username" type="email" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"/>
         </div>
         <div class="login-field">
           <label>Password</label>
@@ -656,6 +656,7 @@ textarea { resize: vertical; min-height: 80px; }
     <button class="nav-item" onclick="goView('trials',this)"><span class="ico">🧪</span> Trial Unit <span id="trial-badge" class="trial-badge" style="display:none"></span></button>
     <button class="nav-item" onclick="goView('pm',this)"><span class="ico">🛡️</span> Preventive Maint. <span id="pm-badge" class="trial-badge" style="display:none"></span></button>
     <button class="nav-item" onclick="goView('inquiry',this)"><span class="ico">📞</span> Inquiry Log <span id="inq-badge" class="trial-badge" style="display:none"></span></button>
+    <button class="nav-item" onclick="goView('onboarding',this)"><span class="ico">🤝</span> Onboarding 90 Hari <span id="ob-badge" class="trial-badge" style="display:none"></span></button>
 
     <div class="sb-section">Team</div>
     <button class="nav-item" onclick="goView('tech-schedule',this)"><span class="ico">🗓️</span> Jadwal Teknisi</button>
@@ -1029,114 +1030,115 @@ textarea { resize: vertical; min-height: 80px; }
 
 <script>
 // ═══════════════════════════════════════════════
-// AUTH SYSTEM
+// AUTH — Supabase Auth (email + password) + daftar staff SC (tabel ksc_staff)
+// Password tidak lagi disimpan di browser. Data hanya bisa dibaca/ditulis staff yang login.
 // ═══════════════════════════════════════════════
-const AUTH_KEY = 'ksc_auth';
-const USERS_KEY = 'ksc_users';
-
-// Default users — stored in localStorage so admin can change passwords
-function getUsers() {
-  try {
-    const stored = localStorage.getItem(USERS_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch(e) {}
-  // Default credentials
-  return [
-    { username: 'admin',   password: 'karcher2025', role: 'Service Manager',  name: 'Admin' },
-    { username: 'teknisi1', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 1' },
-    { username: 'teknisi2', password: 'tech2025',   role: 'Technician',       name: 'Teknisi 2' },
-  ];
-}
-
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+const SUPA_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co';
+const SESSION_KEY = 'ksc_session';
+const ANON_KEY_PUBLIC = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
 
 let currentUser = null;
 let loginAttempts = 0;
 let lockoutUntil = 0;
 let lockoutInterval = null;
 
+function _getSession(){ try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) { return null; } }
+function _setSession(s){ try { if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s)); else localStorage.removeItem(SESSION_KEY); } catch(e) {} }
+function accessToken(){ const s=_getSession(); return (s && s.access_token) || ''; }
+
 function isLoggedIn() {
-  try {
-    const s = sessionStorage.getItem(AUTH_KEY);
-    if (!s) return false;
-    const data = JSON.parse(s);
-    // Session valid for 8 hours
-    if (Date.now() - data.loginAt > 8 * 3600 * 1000) {
-      sessionStorage.removeItem(AUTH_KEY);
-      return false;
-    }
-    currentUser = data;
-    return true;
-  } catch(e) { return false; }
+  const s = _getSession();
+  if (!s || !s.refresh_token || !s.staff) { currentUser = null; return false; }
+  currentUser = { username: s.staff.email, email: s.staff.email, name: s.staff.name, role: s.staff.role, loginAt: s.loginAt };
+  return true;
 }
 
-function doLogin() {
+// Token akses Supabase berlaku 1 jam — diperbarui otomatis sebelum habis
+let _refreshing = null;
+async function ensureFreshToken() {
+  const s = _getSession(); if (!s) return null;
+  if (s.expires_at && Date.now()/1000 < s.expires_at - 60) return s.access_token;
+  if (_refreshing) return _refreshing;
+  _refreshing = (async () => {
+    try {
+      const r = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', { method:'POST', headers:{ 'Content-Type':'application/json', apikey: ANON_KEY_PUBLIC }, body: JSON.stringify({ refresh_token: s.refresh_token }) });
+      if (!r.ok) { if (r.status === 400 || r.status === 401) { _setSession(null); currentUser = null; sessionExpired(); } return null; }
+      const j = await r.json();
+      s.access_token = j.access_token; s.refresh_token = j.refresh_token || s.refresh_token;
+      s.expires_at = j.expires_at || Math.floor(Date.now()/1000) + (j.expires_in || 3600);
+      _setSession(s); return s.access_token;
+    } catch(e) { return s.access_token || null; }
+    finally { _refreshing = null; }
+  })();
+  return _refreshing;
+}
+function sessionExpired() {
+  const admin = document.getElementById('pg-admin');
+  if (admin && admin.classList.contains('active')) {
+    admin.classList.remove('active');
+    document.getElementById('pg-login').classList.add('active');
+    showLoginError('Sesi berakhir — silakan login lagi.');
+  }
+}
+function applyUserToSidebar() {
+  if (!currentUser) return;
+  const av = document.getElementById('sb-avatar-letter'), nm = document.getElementById('sb-uname-text'), rl = document.getElementById('sb-role-text');
+  if (av) av.textContent = (currentUser.name || 'A').charAt(0).toUpperCase();
+  if (nm) nm.textContent = currentUser.name || '';
+  if (rl) rl.textContent = currentUser.role || 'Staff';
+}
+
+async function doLogin() {
   const now = Date.now();
   if (lockoutUntil > now) return;
-
-  const username = (document.getElementById('login-user').value || '').trim().toLowerCase();
-  const password = (document.getElementById('login-pass').value || '').trim();
+  const email = (document.getElementById('login-user').value || '').trim().toLowerCase();
+  const password = (document.getElementById('login-pass').value || '');
   const errorEl = document.getElementById('login-error');
   const lockedEl = document.getElementById('login-locked');
-
-  if (!username || !password) {
-    showLoginError('Masukkan username dan password.');
-    return;
-  }
-
-  const users = getUsers();
-  const user = users.find(u => u.username.toLowerCase() === username && u.password === password);
-
-  if (user) {
-    // Success
+  if (!email || !password) { showLoginError('Masukkan email dan password.'); return; }
+  const btn = document.querySelector('#login-form-area .btn-login') || document.querySelector('#login-form-area button');
+  if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = 'Memeriksa…'; }
+  const done = () => { if (btn) { btn.disabled = false; btn.textContent = btn.dataset.t || 'Login'; } };
+  try {
+    const r = await fetch(SUPA_URL + '/auth/v1/token?grant_type=password', { method:'POST', headers:{ 'Content-Type':'application/json', apikey: ANON_KEY_PUBLIC }, body: JSON.stringify({ email, password }) });
+    if (!r.ok) {
+      done();
+      loginAttempts++;
+      if (loginAttempts >= 5) {
+        lockoutUntil = Date.now() + 30000; loginAttempts = 0;
+        document.getElementById('login-form-area').style.display = 'none';
+        lockedEl.classList.add('show');
+        let secs = 30; document.getElementById('lockout-timer').textContent = secs;
+        lockoutInterval = setInterval(() => {
+          secs--; const t = document.getElementById('lockout-timer'); if (t) t.textContent = secs;
+          if (secs <= 0) { clearInterval(lockoutInterval); lockoutUntil = 0; lockedEl.classList.remove('show'); document.getElementById('login-form-area').style.display = 'block'; }
+        }, 1000);
+      } else showLoginError('Email atau password salah. (' + (5 - loginAttempts) + ' percobaan tersisa)');
+      return;
+    }
+    const tok = await r.json();
+    const sr = await fetch(`${SUPA_URL}/rest/v1/ksc_staff?select=email,name,role&active=eq.true&email=eq.${encodeURIComponent(email)}`, { headers:{ apikey: ANON_KEY_PUBLIC, Authorization: 'Bearer ' + tok.access_token } });
+    const rows = sr.ok ? await sr.json() : [];
+    if (!rows.length) {
+      done();
+      fetch(SUPA_URL + '/auth/v1/logout', { method:'POST', headers:{ apikey: ANON_KEY_PUBLIC, Authorization: 'Bearer ' + tok.access_token } }).catch(()=>{});
+      showLoginError('Akun ini belum terdaftar sebagai staff Service Center. Minta Admin menambahkan email Anda di Settings → Akun Staff.');
+      return;
+    }
     loginAttempts = 0;
-    currentUser = { username: user.username, name: user.name, role: user.role, loginAt: Date.now() };
-    sessionStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
-
-    // Update sidebar info
-    const av = document.getElementById('sb-avatar-letter');
-    const nm = document.getElementById('sb-uname-text');
-    const rl = document.getElementById('sb-role-text');
-    if (av) av.textContent = user.name.charAt(0).toUpperCase();
-    if (nm) nm.textContent = user.name;
-    if (rl) rl.textContent = user.role;
-
-    // Clear fields
-    document.getElementById('login-user').value = '';
-    document.getElementById('login-pass').value = '';
-    errorEl.classList.remove('show');
-    errorEl.textContent = '';
-
-    // Go to admin panel
+    _setSession({ access_token: tok.access_token, refresh_token: tok.refresh_token, expires_at: tok.expires_at || Math.floor(Date.now()/1000) + (tok.expires_in || 3600), staff: rows[0], loginAt: Date.now() });
+    isLoggedIn(); applyUserToSidebar();
+    document.getElementById('login-user').value = ''; document.getElementById('login-pass').value = '';
+    errorEl.classList.remove('show'); errorEl.textContent = '';
+    done();
     document.getElementById('pg-login').classList.remove('active');
     document.getElementById('pg-admin').classList.add('active');
-    renderView('dashboard');
-    goView('dashboard', document.querySelector('.nav-item'));
-  } else {
-    loginAttempts++;
-    if (loginAttempts >= 5) {
-      lockoutUntil = Date.now() + 30000;
-      loginAttempts = 0;
-      document.getElementById('login-form-area').style.display = 'none';
-      lockedEl.classList.add('show');
-      let secs = 30;
-      document.getElementById('lockout-timer').textContent = secs;
-      lockoutInterval = setInterval(() => {
-        secs--;
-        const timerEl = document.getElementById('lockout-timer');
-        if (timerEl) timerEl.textContent = secs;
-        if (secs <= 0) {
-          clearInterval(lockoutInterval);
-          lockoutUntil = 0;
-          lockedEl.classList.remove('show');
-          document.getElementById('login-form-area').style.display = 'block';
-        }
-      }, 1000);
-    } else {
-      showLoginError('Username atau password salah. (' + (5 - loginAttempts) + ' percobaan tersisa)');
-    }
+    setSyncStatus('syncing', 'Memuat data…');
+    renderView('dashboard'); goView('dashboard', document.querySelector('.nav-item'));
+    const ok = await cloudRefresh(false);
+    if (ok) renderView(window.currentView || 'dashboard');
+  } catch (e) {
+    done(); showLoginError('Tidak bisa terhubung ke server. Periksa koneksi internet.');
   }
 }
 
@@ -1147,8 +1149,13 @@ function showLoginError(msg) {
 
 function doLogout() {
   if (!confirm('Logout dari staff portal?')) return;
-  sessionStorage.removeItem(AUTH_KEY);
+  const t = accessToken();
+  if (t) fetch(SUPA_URL + '/auth/v1/logout', { method:'POST', headers:{ apikey: ANON_KEY_PUBLIC, Authorization: 'Bearer ' + t } }).catch(()=>{});
+  _setSession(null);
   currentUser = null;
+  // Hapus salinan data di browser ini (penting untuk komputer bersama)
+  try { localStorage.removeItem(STORE_KEY); localStorage.removeItem('ksc_kpi_cache'); localStorage.removeItem('ksc_users'); } catch(e) {}
+  DB = normalizeDB({}); _baseline = _clone(DB); window._kpi = null;
   document.getElementById('pg-admin').classList.remove('active');
   document.getElementById('pg-login').classList.remove('active');
   document.getElementById('pg-customer').classList.add('active');
@@ -1171,30 +1178,35 @@ function goLogin() {
 // ═══════════════════════════════════════════════
 const STORE_KEY = 'ksc_data';
 
-// ═══════════════════════════════════════════════
-// CLOUD STORAGE (JSONBin.io)
-// ═══════════════════════════════════════════════
-// SETUP STEPS:
-// 1. Daftar gratis di https://jsonbin.io/
-// 2. Klik "Create Bin" → paste isi default JSON (boleh kosong: {}) → Save
-// 3. Copy "Bin ID" (di URL setelah /b/...) dan "X-MASTER-KEY" (di Account Settings → API Keys)
-// 4. Ganti dua nilai di bawah ini → Save file → upload ulang ke GitHub Pages
-const CLOUD = {
-  BIN_ID:  '69fc226dc0954111d8eaf4bf',
-  API_KEY: '$2a$10$YR40k77iw/wCJ8bv4RbSPeyCtrVPN9otsttrKexOacIhnCnma69hO'
-};
-
-const CLOUD_API = 'https://api.jsonbin.io/v3/b';
+// Penyimpanan cloud: Supabase (tabel ksc_state). JSONBin sudah tidak dipakai.
 
 // ── Email notifications (reuse Sales Monitor's Supabase send-reminder function; Gmail SMTP, no extra cost) ──
 const EMAIL_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/send-reminder';
 const EMAIL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
 const PM_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-pm-eligible';
 const KPI_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-sc-kpi';
+const PUBLIC_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-public';
+const STAFF_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-staff-admin';
+// Pengunjung tanpa login (customer, sales, Sales Manager via email) hanya lewat function publik ini
+async function publicCall(payload){
+  const r = await fetch(PUBLIC_FN_URL, { method:'POST', headers:{ 'Content-Type':'application/json', apikey: EMAIL_ANON_KEY, Authorization: 'Bearer ' + EMAIL_ANON_KEY }, body: JSON.stringify(payload) });
+  let j = null; try { j = await r.json(); } catch(e) {}
+  if (!j) throw new Error('Server tidak merespons (HTTP ' + r.status + ')');
+  if (!j.ok) throw new Error(j.error || 'Gagal');
+  return j;
+}
+async function staffCall(payload){
+  await ensureFreshToken();
+  const r = await fetch(STAFF_FN_URL, { method:'POST', headers:{ 'Content-Type':'application/json', ...supaHeaders() }, body: JSON.stringify(payload) });
+  let j = null; try { j = await r.json(); } catch(e) {}
+  if (!j) throw new Error('Server tidak merespons (HTTP ' + r.status + ')');
+  if (!j.ok) throw new Error(j.error || 'Gagal');
+  return j;
+}
 // ── Primary cloud store: Supabase Postgres (jsonb). JSONBin kept as read-only fallback for one-time migration. ──
 const SUPA_STATE = 'https://uhdrvpcegpcibxxvubyb.supabase.co/rest/v1/ksc_state';
 const STATE_ID = 'main';
-function supaHeaders(){ return { 'apikey': EMAIL_ANON_KEY, 'Authorization': 'Bearer ' + EMAIL_ANON_KEY }; }
+function supaHeaders(){ const t=accessToken(); return { 'apikey': EMAIL_ANON_KEY, 'Authorization': 'Bearer ' + (t || EMAIL_ANON_KEY) }; }
 function _hasData(d){ return !!(d && ((Array.isArray(d.tickets)&&d.tickets.length)||(Array.isArray(d.trials)&&d.trials.length)||(Array.isArray(d.visits)&&d.visits.length)||(d.pm&&Array.isArray(d.pm.entitlements)&&d.pm.entitlements.length))); }
 const cloudIsConfigured = () => true;
 
@@ -1214,7 +1226,8 @@ function setSyncStatus(state, msg) {
 }
 
 async function cloudLoad() {
-  // Primary: Supabase
+  // Hanya staff yang login yang bisa membaca data
+  if (!(await ensureFreshToken())) return null;
   try {
     const res = await fetch(`${SUPA_STATE}?id=eq.${STATE_ID}&select=data`, { headers: supaHeaders() });
     if (res.ok) {
@@ -1223,17 +1236,14 @@ async function cloudLoad() {
       if (_hasData(d)) return d;
     } else {
       console.error('[Supa] load HTTP', res.status);
+      if (res.status === 401) sessionExpired();
     }
   } catch (e) { console.error('[Supa] load failed:', e); }
-  // Fallback: legacy JSONBin (read-only, migrates old data on first load)
-  try {
-    const res = await fetch(`${CLOUD_API}/${CLOUD.BIN_ID}/latest`, { headers: { 'X-Master-Key': CLOUD.API_KEY, 'X-Bin-Meta': 'false' } });
-    if (res.ok) return await res.json();
-  } catch (e) {}
   return null;
 }
 
 async function cloudSave(data) {
+  if (!(await ensureFreshToken())) return false;
   try {
     // Always merge onto the freshest server copy so we never clobber other computers.
     let payload = data;
@@ -1384,6 +1394,8 @@ function mergeDB(base,cur,fresh){
   out.visits      = _mergeArr(base.visits,cur.visits,fresh.visits,'id');
   out.technicians = _mergeArr(base.technicians,cur.technicians,fresh.technicians,'id');
   out.trials      = _mergeArr(base.trials,cur.trials,fresh.trials,'id');
+  out.inquiries   = _mergeArr(base.inquiries,cur.inquiries,fresh.inquiries,'id');
+  out.onboarding  = _mergeObj(base.onboarding,cur.onboarding,fresh.onboarding);
   out.settings    = _mergeObj(base.settings,cur.settings,fresh.settings);
   const bp=base.pm||{}, cp=cur.pm||{}, fp=fresh.pm||{};
   out.pm = _clone(fp);
@@ -1397,10 +1409,10 @@ function mergeDB(base,cur,fresh){
   });
   return out;
 }
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.inquiries=Array.isArray(d.inquiries)?d.inquiries:[]; d.onboarding=(d.onboarding&&typeof d.onboarding==='object')?d.onboarding:{}; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
 let DB = normalizeDB(loadData());
 let _baseline = _clone(DB);
-const APP_VERSION = '2026-07-16-supabase-merge';
+const APP_VERSION = '2026-10-06-auth';
 // Collision-safe sequential id: max existing number for this year + 1
 function nextSeq(prefix, arr, pad){
   const y = new Date().getFullYear();
@@ -1449,19 +1461,14 @@ async function trackTicket() {
   const res = document.getElementById('cust-result');
   if (!q) { toast('Enter a ticket number', 'err'); return; }
 
-  // Fresh-fetch from cloud so customer always sees the latest status
-  if (cloudIsConfigured()) {
-    res.innerHTML = `<div class="no-result"><div class="icon">⏳</div><h3>Loading...</h3><p>Fetching latest status from server...</p></div>`;
-    const fresh = await cloudLoad();
-    // Only replace local if cloud actually has tickets (don't wipe local with empty cloud)
-    if (fresh && ((Array.isArray(fresh.tickets)&&fresh.tickets.length>0)||(Array.isArray(fresh.trials)&&fresh.trials.length>0))) {
-      DB = normalizeDB(fresh);
-      localStorage.setItem(STORE_KEY, JSON.stringify(DB));
-    }
-  }
+  // Status diambil dari server lewat function publik (hanya data yang aman ditampilkan)
+  res.innerHTML = `<div class="no-result"><div class="icon">⏳</div><h3>Loading...</h3><p>Fetching latest status from server...</p></div>`;
+  let item = null;
+  try { const j = await publicCall({ action:'track', id:q }); item = j.found ? j.item : null; }
+  catch (e) { res.innerHTML = errBox('Gagal memuat status: ' + e.message); return; }
 
-  if (q.startsWith('TRL')) { renderTrialResult(q, res); return; }
-  const t = DB.tickets.find(x => x.id === q);
+  if (q.startsWith('TRL')) { renderTrialResult(q, res, item); return; }
+  const t = item;
   if (!t) {
     res.innerHTML = `<div class="no-result"><div class="icon">🔍</div><h3>Ticket Not Found</h3><p>No service record found for <strong>${esc(q)}</strong>.<br>Please check the ticket number and try again.</p></div>`;
     return;
@@ -1483,7 +1490,7 @@ async function trackTicket() {
     </div>`;
   }).join('');
 
-  const histHtml = [...t.history].reverse().map((h,i) => `
+  const histHtml = [...(t.history||[])].reverse().map((h,i) => `
     <div class="tl-item">
       <div class="tl-dot-col"><div class="tl-dot" style="${i===0?'background:var(--green)':''}"></div><div class="tl-vline"></div></div>
       <div class="tl-text">
@@ -1540,7 +1547,7 @@ async function trackTicket() {
 // ═══════════════════════════════════════════════
 function renderView(view) {
   window.currentView = view;
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', inquiry:'Inquiry Log', kpi:'KPI Service Center', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', inquiry:'Inquiry Log', kpi:'KPI Service Center', onboarding:'Onboarding 90 Hari', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
 
@@ -1565,6 +1572,7 @@ function renderView(view) {
   else if (view==='pm') c.innerHTML = viewPM();
   else if (view==='inquiry') c.innerHTML = viewInquiry();
   else if (view==='kpi') c.innerHTML = viewKPI();
+  else if (view==='onboarding') c.innerHTML = viewOnboarding();
   else if (view==='tech-schedule') c.innerHTML = viewTechSchedule();
   else if (view==='settings') c.innerHTML = viewSettings();
 
@@ -1581,6 +1589,7 @@ function renderView(view) {
   updateTrialBadge();
   updatePMBadge();
   if (typeof updateInqBadge==='function') updateInqBadge();
+  if (typeof updateObBadge==='function') updateObBadge();
 }
 
 // ─── DASHBOARD ───
@@ -2159,8 +2168,8 @@ function deleteTech(id){
 
 // ─── SETTINGS ───
 function viewSettings() {
-  const users = getUsers();
-  const loggedUser = currentUser ? users.find(u => u.username === currentUser.username) : null;
+  const canManage = currentUser && ['Admin','Service Manager'].includes(currentUser.role);
+  if (canManage && !window._staffList && !window._staffLoading) setTimeout(loadStaffList, 0);
 
   return `
   <div style="max-width:600px">
@@ -2169,12 +2178,8 @@ function viewSettings() {
       <div class="card-hd"><h3>🔐 Ganti Password Anda</h3></div>
       <div class="card-body" style="padding:16px">
         <div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Password Lama</div>
-          <input type="password" id="pw-old" placeholder="Password saat ini" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
-        </div>
-        <div style="margin-bottom:12px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Password Baru</div>
-          <input type="password" id="pw-new" placeholder="Password baru (min 6 karakter)" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
+          <input type="password" id="pw-new" placeholder="Password baru (min 8 karakter)" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>
         </div>
         <div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Konfirmasi Password Baru</div>
@@ -2184,25 +2189,7 @@ function viewSettings() {
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-hd"><h3>👥 Kelola Akun Staff</h3><div class="sep"></div><button class="btn btn-y btn-sm" onclick="openAddUser()">+ Tambah User</button></div>
-      <table class="tbl">
-        <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Aksi</th></tr></thead>
-        <tbody>
-          ${users.map(u => `<tr>
-            <td><span class="mono">${esc(u.username)}</span></td>
-            <td class="bold">${esc(u.name)}</td>
-            <td><span class="muted">${esc(u.role)}</span></td>
-            <td>
-              <div class="btn-row">
-                <button class="btn btn-sm" onclick="openResetPw('${esc(u.username)}')">Reset PW</button>
-                ${u.username !== (currentUser && currentUser.username) ? `<button class="btn btn-sm btn-red" onclick="deleteUser('${esc(u.username)}')">Hapus</button>` : '<span class="muted" style="font-size:11px">(Anda)</span>'}
-              </div>
-            </td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
+    ${canManage ? staffCard() : ''}
 
     ${trialSettingsCard()}
 
@@ -2212,7 +2199,7 @@ function viewSettings() {
       <div class="card-hd"><h3>ℹ️ Info Sesi</h3></div>
       <div class="card-body" style="padding:16px;font-size:13px;color:var(--t2);line-height:2">
         <div>👤 Login sebagai: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.name) : '—'}</strong></div>
-        <div>🔑 Username: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.username) : '—'}</strong></div>
+        <div>✉️ Email: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.email||currentUser.username) : '—'}</strong></div>
         <div>📋 Role: <strong style="color:var(--t1)">${currentUser ? esc(currentUser.role) : '—'}</strong></div>
         <div>🕐 Login pada: <strong style="color:var(--t1)">${currentUser ? fmtDate(currentUser.loginAt) : '—'}</strong></div>
         <div style="margin-top:12px">
@@ -2223,62 +2210,72 @@ function viewSettings() {
   </div>`;
 }
 
-function changePassword() {
-  const oldPw = (document.getElementById('pw-old') && document.getElementById('pw-old').value) || '';
+async function changePassword() {
   const newPw = (document.getElementById('pw-new') && document.getElementById('pw-new').value) || '';
-  const confirm = (document.getElementById('pw-confirm') && document.getElementById('pw-confirm').value) || '';
-  if (!oldPw || !newPw || !confirm) { toast('Isi semua field password', 'err'); return; }
-  if (newPw.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
-  if (newPw !== confirm) { toast('Konfirmasi password tidak cocok', 'err'); return; }
-  const users = getUsers();
-  const u = users.find(x => x.username === currentUser.username);
-  if (!u) { toast('User tidak ditemukan', 'err'); return; }
-  if (u.password !== oldPw) { toast('Password lama salah', 'err'); return; }
-  u.password = newPw;
-  saveUsers(users);
-  if (document.getElementById('pw-old')) document.getElementById('pw-old').value = '';
-  if (document.getElementById('pw-new')) document.getElementById('pw-new').value = '';
-  if (document.getElementById('pw-confirm')) document.getElementById('pw-confirm').value = '';
-  toast('Password berhasil diubah', 'ok');
+  const conf = (document.getElementById('pw-confirm') && document.getElementById('pw-confirm').value) || '';
+  if (!newPw || !conf) { toast('Isi password baru dan konfirmasinya', 'err'); return; }
+  if (newPw.length < 8) { toast('Password minimal 8 karakter', 'err'); return; }
+  if (newPw !== conf) { toast('Konfirmasi password tidak cocok', 'err'); return; }
+  if (!(await ensureFreshToken())) { toast('Sesi berakhir, login ulang', 'err'); return; }
+  try {
+    const r = await fetch(SUPA_URL + '/auth/v1/user', { method:'PUT', headers:{ 'Content-Type':'application/json', ...supaHeaders() }, body: JSON.stringify({ password: newPw }) });
+    if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.msg || j.message || ('HTTP ' + r.status)); }
+    document.getElementById('pw-new').value = ''; document.getElementById('pw-confirm').value = '';
+    toast('Password berhasil diubah', 'ok');
+  } catch (e) { toast('Gagal mengubah password: ' + e.message, 'err'); }
 }
 
-function openAddUser() {
-  const name = prompt('Nama lengkap:');
-  if (!name || !name.trim()) return;
-  const username = prompt('Username (tanpa spasi):');
-  if (!username || !username.trim()) return;
-  if (/\s/.test(username)) { toast('Username tidak boleh mengandung spasi', 'err'); return; }
-  const users = getUsers();
-  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) { toast('Username sudah digunakan', 'err'); return; }
-  const role = prompt('Role (Technician / Service Manager / Sales Manager):', 'Technician');
-  const password = prompt('Password awal (min 6 karakter):');
-  if (!password || password.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
-  users.push({ username: username.trim(), password, role: (role||'Technician').trim(), name: name.trim() });
-  saveUsers(users);
-  renderView('settings');
-  toast('User ' + username + ' ditambahkan', 'ok');
+// ─── Akun staff (Supabase Auth + ksc_staff) ───
+const STAFF_ROLES = ['Service Manager','Admin SC','Technician','Sales Manager','Admin'];
+async function loadStaffList(){
+  window._staffLoading = true;
+  try { const j = await staffCall({ action:'list' }); window._staffList = j.staff || []; window._staffErr = ''; }
+  catch (e) { window._staffErr = e.message; window._staffList = []; }
+  window._staffLoading = false;
+  if (window.currentView === 'settings') renderView('settings');
+}
+function staffCard(){
+  const list = window._staffList;
+  const rows = !list ? '<tr><td colspan="4" class="empty-row">Memuat…</td></tr>'
+    : list.length ? list.map(u => `<tr style="${u.active?'':'opacity:.5'}">
+        <td><div class="bold">${esc(u.name)}</div><div class="muted mono" style="font-size:11px">${esc(u.email)}</div></td>
+        <td><select onchange="staffUpdate('${esc(u.email)}',{role:this.value})" style="background:var(--bg3);border:1px solid var(--b2);border-radius:6px;color:var(--t1);font-size:12px;padding:4px 6px">${STAFF_ROLES.map(r=>`<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select></td>
+        <td>${u.active?'<span style="color:var(--green);font-size:12px">Aktif</span>':'<span class="muted" style="font-size:12px">Nonaktif</span>'}</td>
+        <td><div class="btn-row">
+          <button class="btn btn-sm" onclick="staffResetPw('${esc(u.email)}')">Reset PW</button>
+          ${u.email===(currentUser&&currentUser.email)?'<span class="muted" style="font-size:11px">(Anda)</span>':`<button class="btn btn-sm" onclick="staffUpdate('${esc(u.email)}',{active:${!u.active}})">${u.active?'Nonaktifkan':'Aktifkan'}</button><button class="btn btn-sm btn-red" onclick="staffRemove('${esc(u.email)}')">Hapus</button>`}
+        </div></td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty-row">Belum ada staff.</td></tr>';
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><h3>👥 Akun Staff Service Center</h3><div class="sep"></div><button class="btn btn-y btn-sm" onclick="staffAdd()">+ Tambah Staff</button></div>
+    ${window._staffErr?`<div style="padding:10px 14px;color:var(--red);font-size:12px">⚠️ ${esc(window._staffErr)}</div>`:''}
+    <table class="tbl"><thead><tr><th>Staff</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="padding:10px 14px;font-size:11px;color:var(--t3);line-height:1.6">Login memakai <b>email + password</b>. Kalau email sudah punya akun di app Kalingga lain (Sales Monitor, Quotation), staff memakai password yang sama. Menghapus staff hanya mencabut akses Service Center — akun loginnya tetap ada untuk app lain.</div>
+  </div>`;
+}
+async function staffAdd(){
+  const email=(prompt('Email staff (dipakai untuk login):')||'').trim().toLowerCase(); if(!email) return;
+  const name=(prompt('Nama lengkap:')||'').trim(); if(!name) return;
+  const role=(prompt('Role — ketik salah satu:\nService Manager / Admin SC / Technician / Sales Manager','Technician')||'').trim();
+  if(!STAFF_ROLES.includes(role)){ toast('Role tidak dikenal','err'); return; }
+  const password=prompt('Password awal (min 8 karakter).\nKosongkan kalau email ini sudah punya akun di app Kalingga lain:')||'';
+  try{ const j=await staffCall({action:'add',email,name,role,password}); toast(j.note||'Staff ditambahkan','ok'); window._staffList=null; renderView('settings'); }
+  catch(e){ toast('Gagal: '+e.message,'err'); }
+}
+async function staffUpdate(email,patch){
+  try{ await staffCall({action:'update',email,...patch}); toast('Tersimpan','ok'); }catch(e){ toast('Gagal: '+e.message,'err'); }
+  window._staffList=null; renderView('settings');
+}
+async function staffResetPw(email){
+  const pw=prompt('Password baru untuk '+email+' (min 8 karakter).\nCatatan: kalau akun ini juga dipakai di app lain, passwordnya ikut berubah.'); if(!pw) return;
+  try{ await staffCall({action:'reset_password',email,password:pw}); toast('Password direset','ok'); }catch(e){ toast('Gagal: '+e.message,'err'); }
+}
+async function staffRemove(email){
+  if(!confirm('Cabut akses Service Center untuk '+email+'?')) return;
+  try{ await staffCall({action:'remove',email}); toast('Akses dicabut','ok'); }catch(e){ toast('Gagal: '+e.message,'err'); }
+  window._staffList=null; renderView('settings');
 }
 
-function openResetPw(username) {
-  const newPw = prompt('Password baru untuk ' + username + ' (min 6 karakter):');
-  if (!newPw || newPw.length < 6) { toast('Password minimal 6 karakter', 'err'); return; }
-  const users = getUsers();
-  const u = users.find(x => x.username === username);
-  if (!u) { toast('User tidak ditemukan', 'err'); return; }
-  u.password = newPw;
-  saveUsers(users);
-  toast('Password ' + username + ' direset', 'ok');
-}
-
-function deleteUser(username) {
-  if (!confirm('Hapus user ' + username + '?')) return;
-  const users = getUsers();
-  const filtered = users.filter(u => u.username !== username);
-  if (filtered.length === 0) { toast('Tidak bisa menghapus semua user', 'err'); return; }
-  saveUsers(filtered);
-  renderView('settings');
-  toast('User ' + username + ' dihapus', 'ok');
-}
 
 // ═══════════════════════════════════════════════
 // SEARCH
@@ -2340,7 +2337,7 @@ function statusLabel(s) {
 }
 function prioBadge(p) {
   const m={urgent:'<span style="background:var(--red-d);color:var(--red);border:1px solid rgba(255,90,90,.3);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">⚡ Urgent</span>',high:'<span style="background:var(--orange-d);color:var(--orange);border:1px solid rgba(255,159,64,.3);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">High</span>',normal:'<span style="color:var(--t3);font-size:12px">Normal</span>'};
-  return m[p]||p;
+  return m[p]||'<span style="color:var(--t3);font-size:12px">Normal</span>';
 }
 function techColor(name) {
   const t=DB.technicians.find(x=>x.name===name);
@@ -2438,8 +2435,12 @@ function openTrialRequest(){
   const d=document.getElementById('tr-duration'); if(d) d.value='7';
   const sd=document.getElementById('tr-start'); if(sd) sd.value=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const sel=document.getElementById('tr-manager');
-  if(sel){ const m=getSalesManagers();
-    sel.innerHTML = m.length ? m.map((x,i)=>`<option value="${i}">${esc(x.name)}</option>`).join('') : '<option value="">(Belum ada Sales Manager terdaftar)</option>';
+  if(sel){
+    sel.innerHTML='<option value="">Memuat…</option>';
+    publicCall({action:'trial_config'}).then(j=>{
+      const m=j.managers||[];
+      sel.innerHTML = m.length ? m.map(x=>`<option value="${x.index}">${esc(x.name)}</option>`).join('') : '<option value="">(Belum ada Sales Manager terdaftar)</option>';
+    }).catch(()=>{ sel.innerHTML='<option value="">(Gagal memuat — coba buka ulang)</option>'; });
   }
   openModal('modal-trial');
 }
@@ -2448,36 +2449,19 @@ async function submitTrial(){
   const company=g('tr-company'), pic=g('tr-pic'), phone=g('tr-phone'), email=g('tr-email'), machine=g('tr-machine'), salesName=g('tr-sales');
   if(!company||!pic||!phone||!machine||!salesName){ toast('Lengkapi kolom wajib bertanda *','err'); return; }
   if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Format email tidak valid','err'); return; }
-  const mgrs=getSalesManagers();
   const mi=(document.getElementById('tr-manager')||{}).value;
-  const manager=(mi!=='' && mi!=null && mgrs[mi])?mgrs[mi]:null;
   const btn=document.getElementById('tr-submit-btn'); if(btn){ btn.disabled=true; btn.textContent='Mengirim…'; }
-
-  let base=DB;
-  if(cloudIsConfigured()){
-    const fresh=await cloudLoad();
-    if(fresh && ((Array.isArray(fresh.tickets)&&fresh.tickets.length)||(Array.isArray(fresh.trials)&&fresh.trials.length))) base=normalizeDB(fresh);
-  }
-  base=normalizeDB(base);
-  const now=Date.now();
-  const y=new Date().getFullYear();
-  const id=nextSeq('TRL', base.trials, 3);
-  const tr={ id, company, pic, phone, email, machineType:machine, qty:g('tr-qty')||'1', address:g('tr-address'), startDate:g('tr-start'), duration:g('tr-duration')||'', salesName, managerName:manager?manager.name:'', managerEmail:manager?manager.email:'', notes:g('tr-notes'), status:'pending', createdAt:now, updatedAt:now, history:[{ts:now,action:'Pengajuan dibuat',by:salesName,note:'Diajukan via form publik'}] };
-  tr.token = (typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
-  base.trials.push(tr);
-  DB=base; saveData(DB);
-
-  closeModal('modal-trial');
-  toast('Pengajuan terkirim: '+id,'ok');
-  const res=document.getElementById('tr-result')||document.getElementById('cust-result');
-  if(res) res.innerHTML=`<div class="ticket-result" style="text-align:center;padding:30px"><div style="font-size:42px">✅</div><h3 style="margin:8px 0;color:var(--green)">Pengajuan Trial Terkirim</h3><p style="color:var(--t2);line-height:1.6">Nomor pengajuan Anda: <strong style="color:var(--y);font-family:var(--mono)">${id}</strong><br>Simpan nomor ini untuk cek status. <b>Sales Manager</b> akan meninjau pengajuan, lalu tim Service Center menindaklanjuti.</p></div>`;
-
-  const sc=getSettings().scEmails;
-  const _apUrl = location.origin + location.pathname + '#trial=' + encodeURIComponent(id) + '&t=' + encodeURIComponent(tr.token);
-  const _cta = `<div style="margin:16px 0"><a href="${_apUrl}" style="display:inline-block;background:#FFD700;color:#1a1a1a;font-weight:700;text-decoration:none;padding:13px 24px;border-radius:8px;font-size:15px">Tinjau &amp; Setujui / Tolak →</a></div><p style="color:#777;font-size:12px;word-break:break-all">Atau buka tautan ini: <a href="${_apUrl}">${_apUrl}</a></p>`;
-  const _mgrEmails = manager ? managerEmails(manager) : [];
-  if(_mgrEmails.length){ tr.managerEmails=_mgrEmails; sendTrialEmail(_mgrEmails, `[Trial Unit] Pengajuan baru ${id} — butuh persetujuan`, trialEmailHtml('Pengajuan Trial Unit Baru', `Halo ${esc(manager.name)}, ada pengajuan trial unit baru dari <b>${esc(salesName)}</b>. Anda dapat <b>menyetujui atau menolak langsung dari email ini</b> — tanpa perlu login.${_mgrEmails.length>1?' Email ini dikirim ke beberapa penyetuju; <b>persetujuan pertama</b> yang masuk dianggap final.':''} Klik tombol di bawah.`, tr, '', _cta)); }
-  if(sc) sendTrialEmail(sc, `[Trial Unit] Pengajuan baru ${id} (menunggu approval)`, trialEmailHtml('Pengajuan Trial Unit Baru (FYI)', `Ada pengajuan trial unit baru. Tim Service Center dapat memproses setelah disetujui Sales Manager.`, tr));
+  try{
+    const j=await publicCall({ action:'trial_submit', company, pic, phone, email, machineType:machine, salesName,
+      qty:g('tr-qty')||'1', address:g('tr-address'), startDate:g('tr-start'), duration:g('tr-duration')||'', notes:g('tr-notes'),
+      managerIndex: (mi===''||mi==null)?-1:Number(mi), origin: location.origin });
+    const id=j.id;
+    closeModal('modal-trial');
+    toast('Pengajuan terkirim: '+id,'ok');
+    const res=document.getElementById('tr-result')||document.getElementById('cust-result');
+    if(res) res.innerHTML=`<div class="ticket-result" style="text-align:center;padding:30px"><div style="font-size:42px">✅</div><h3 style="margin:8px 0;color:var(--green)">Pengajuan Trial Terkirim</h3><p style="color:var(--t2);line-height:1.6">Nomor pengajuan Anda: <strong style="color:var(--y);font-family:var(--mono)">${esc(id)}</strong><br>Simpan nomor ini untuk cek status. <b>Sales Manager</b> akan meninjau pengajuan, lalu tim Service Center menindaklanjuti.</p></div>`;
+    if(isLoggedIn()) cloudRefresh(true).then(ok=>{ if(ok&&window.currentView) renderView(window.currentView); });
+  }catch(e){ toast('Gagal mengirim: '+e.message,'err'); }
   if(btn){ btn.disabled=false; btn.textContent='Kirim Pengajuan'; }
 }
 
@@ -2586,8 +2570,8 @@ function updateTrialBadge(){
   if(['Service Manager','Technician'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='approved').length;
   if(n>0){ el.textContent=n; el.style.display='inline-block'; } else { el.style.display='none'; }
 }
-function renderTrialResult(q,res){
-  const t=(DB.trials||[]).find(x=>x.id===q);
+function renderTrialResult(q,res,item){
+  const t=(item!==undefined)?item:(DB.trials||[]).find(x=>x.id===q);
   if(!t){ res.innerHTML=`<div class="no-result"><div class="icon">🔍</div><h3>Pengajuan Tidak Ditemukan</h3><p>Tidak ada pengajuan trial dengan nomor <strong>${esc(q)}</strong>.</p></div>`; return; }
   const hist=(t.history||[]).slice().reverse().map((h,i)=>`<div class="tl-item"><div class="tl-dot-col"><div class="tl-dot" style="${i===0?'background:var(--green)':''}"></div><div class="tl-vline"></div></div><div class="tl-text"><div class="tl-action">${esc(h.action)}</div><div class="tl-time">${fmtDate(h.ts)}</div>${h.note?`<div class="tl-note">${esc(h.note)}</div>`:''}</div></div>`).join('');
   res.innerHTML=`<div class="ticket-result"><div class="tc-header"><div><div class="tc-id">${esc(t.id)}</div><div class="tc-machine">${esc(t.machineType)}</div><div class="tc-customer">👤 ${esc(t.company)} · ${esc(t.pic)}</div></div><div class="tc-status-badge">${trialBadge(t.status)}</div></div><div class="tc-details"><div class="tc-grid"><div class="tc-field"><label>Sales Pengaju</label><span>${esc(t.salesName)}</span></div><div class="tc-field"><label>Sales Manager</label><span>${esc(t.managerName)||'—'}</span></div><div class="tc-field"><label>Tgl Mulai Diminta</label><span>${t.startDate?fmtDateOnly(t.startDate):'—'}</span></div><div class="tc-field"><label>Diajukan</label><span>${fmtDate(t.createdAt)}</span></div></div><div class="timeline"><div class="tl-title">Riwayat Pengajuan</div>${hist}</div></div></div>`;
@@ -2631,14 +2615,11 @@ function openApprovalPage(id, token){
 }
 async function loadApproval(id, token){
   const body=document.getElementById('approve-body'); if(!body) return;
-  let data=DB;
-  if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) data=normalizeDB(f); }
-  const t=(data.trials||[]).find(x=>x.id===id);
-  if(!t){ body.innerHTML=errBox('Pengajuan tidak ditemukan. Periksa kembali tautan dari email.'); return; }
-  if(!t.token || t.token!==token){ body.innerHTML=errBox('Tautan tidak valid atau sudah kedaluwarsa.'); return; }
-  DB=data; try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
-  if(t.status!=='pending'){ body.innerHTML=doneBox(t,false); return; }
-  body.innerHTML=approvalForm(t, token);
+  try{
+    const j=await publicCall({action:'approval_get', id, token});
+    const t=j.item;
+    body.innerHTML = t.status!=='pending' ? doneBox(t,false) : approvalForm(t, token);
+  }catch(e){ body.innerHTML=errBox(e.message); }
 }
 function approvalForm(t, token){
   return `<div class="ticket-result">
@@ -2666,19 +2647,11 @@ async function decideApproval(id, token, action){
   const noteEl=document.getElementById('ap-note'); const note=noteEl?noteEl.value:'';
   if(action==='reject' && !note.trim()){ toast('Mohon isi alasan penolakan','err'); return; }
   const acts=document.getElementById('ap-actions'); if(acts) acts.innerHTML='<div style="color:var(--t3);padding:8px">⏳ Memproses…</div>';
-  let data=DB;
-  if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) data=normalizeDB(f); }
-  const t=(data.trials||[]).find(x=>x.id===id);
   const body=document.getElementById('approve-body');
-  if(!t || t.token!==token){ if(body) body.innerHTML=errBox('Tautan tidak valid.'); return; }
-  if(t.status!=='pending'){ if(body) body.innerHTML=doneBox(t,false); return; }
-  const actor=t.managerName||'Sales Manager';
-  if(action==='approve') applyApproval(t, actor, note); else applyRejection(t, actor, note);
-  DB=data;
-  if(cloudIsConfigured()){ const ok=await cloudSave(data); if(!ok){ if(body) body.innerHTML=errBox('Gagal menyimpan ke server. Coba lagi.'); return; } }
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
-  sendApprovalEmails(t, action);
-  if(body) body.innerHTML=doneBox(t, true);
+  try{
+    const j=await publicCall({action:'approval_decide', id, token, decision:action, note});
+    if(body) body.innerHTML=doneBox(j.item, !j.already);
+  }catch(e){ if(body) body.innerHTML=errBox(e.message); }
 }
 function doneBox(t, justActed){
   const map={approved:['✅','Pengajuan Disetujui','Tim Service Center sudah diberi tahu dan akan menindaklanjuti.'],rejected:['🚫','Pengajuan Ditolak','Sales pengaju telah diberi tahu.'],running:['🚚','Trial Sedang Berjalan','Pengajuan ini sudah diproses tim Service Center.'],done:['🏁','Trial Selesai','Pengajuan ini sudah selesai.'],pending:['⏳','Menunggu Persetujuan','']};
@@ -2695,7 +2668,7 @@ function trackTrialOnPage(){
   const res=document.getElementById('tr-result'); if(!res) return;
   if(!q){ toast('Masukkan nomor TRL','err'); return; }
   res.innerHTML='<div style="text-align:center;padding:20px;color:var(--t3)">⏳ Memuat…</div>';
-  (async()=>{ if(cloudIsConfigured()){ const f=await cloudLoad(); if(f) DB=normalizeDB(f); } renderTrialResult(q,res); })();
+  (async()=>{ try{ const j=await publicCall({action:'track',id:q}); renderTrialResult(q,res,j.found?j.item:null); }catch(e){ res.innerHTML=errBox('Gagal memuat: '+e.message); } })();
 }
 window.addEventListener('hashchange', ()=>{
   const a=parseTrialHash(); if(a){ openApprovalPage(a.id, a.token); return; }
@@ -2857,7 +2830,8 @@ function viewPM(){
 async function syncPM(){
   const btn=document.getElementById('pm-sync-btn'); if(btn){ btn.disabled=true; btn.textContent='⏳ Sync…'; }
   try{
-    const res=await fetch(PM_FN_URL,{ method:'POST', headers:{'Content-Type':'application/json','apikey':EMAIL_ANON_KEY,'Authorization':'Bearer '+EMAIL_ANON_KEY}, body:JSON.stringify({ threshold:pmThreshold(), monthsBack:pmMonthsBack() }) });
+    await ensureFreshToken();
+    const res=await fetch(PM_FN_URL,{ method:'POST', headers:{'Content-Type':'application/json',...supaHeaders()}, body:JSON.stringify({ threshold:pmThreshold(), monthsBack:pmMonthsBack() }) });
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'Gagal');
     if(!DB.pm) DB.pm={visits:{}};
@@ -3433,7 +3407,8 @@ async function loadKPI(fresh){
   const st=kpiState(); if(st.loading) return; st.loading=true; st.error='';
   if(window.currentView==='kpi') renderView('kpi');
   try{
-    const headers={'Content-Type':'application/json','apikey':EMAIL_ANON_KEY,'Authorization':'Bearer '+EMAIL_ANON_KEY};
+    await ensureFreshToken();
+    const headers={'Content-Type':'application/json',...supaHeaders()};
     const tok=kpiToken(); if(tok) headers['x-sc-token']=tok;
     const res=await fetch(KPI_FN_URL,{method:'POST',headers,body:JSON.stringify({fresh:!!fresh})});
     let data=null; try{ data=await res.json(); }catch(e){ throw new Error('Edge function karcher-sc-kpi belum di-deploy (HTTP '+res.status+')'); }
@@ -3578,8 +3553,7 @@ function kpiSettingsCard(){
         <div>${lbl('Target fill rate (%)')}${inp('set-kpi-fill',T.fill,'85')}</div>
         <div>${lbl('Target inquiry → order (%)')}${inp('set-kpi-inq',T.inqConv||'','kosongkan dulu')}</div>
       </div>
-      <div style="margin-bottom:16px">${lbl('Token KPI (khusus perangkat ini)')}${inp('set-kpi-token',tok,'sama dengan secret SC_KPI_TOKEN di Supabase','password')}
-        <div style="font-size:11px;color:var(--t3);margin-top:4px">Disimpan hanya di browser ini, tidak ikut tersinkron. Isi sekali di setiap laptop/HP yang membuka KPI.</div></div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:14px">Akses data KPI otomatis mengikuti login staff — tidak perlu token lagi.</div>
       <button class="btn btn-y btn-sm" onclick="saveKPISettings()">💾 Simpan</button>
     </div></div>`;
 }
@@ -3587,10 +3561,146 @@ function saveKPISettings(){
   const s=getSettings(); if(!s.kpi) s.kpi={};
   const num=id=>Number((document.getElementById(id)||{}).value)||0;
   s.kpi.annual=num('set-kpi-annual'); s.kpi.pmConv=num('set-kpi-pm')||65; s.kpi.attach=num('set-kpi-attach')||50; s.kpi.fill=num('set-kpi-fill')||85; s.kpi.inqConv=num('set-kpi-inq');
-  const tok=((document.getElementById('set-kpi-token')||{}).value||'').trim();
-  try{ if(tok) localStorage.setItem(KPI_TOKEN_KEY,tok); else localStorage.removeItem(KPI_TOKEN_KEY); }catch(e){}
   saveData(DB); renderView('settings'); toast('Pengaturan KPI disimpan','ok');
   if(window._kpi){ window._kpi.error=''; window._kpi.ts=0; }
+}
+
+// ═══════════════════════════════════════════════
+// ONBOARDING 90 HARI — setiap pembeli unit baru (dari Odoo) dihubungi 3x:
+//   H+30 telepon cek kepuasan · H+60 tawarkan starter kit consumables · H+90 jadwalkan PM / kunjungan
+// Data invoice dari edge function karcher-sc-kpi; progres disimpan di DB.onboarding[invoiceId]
+// ═══════════════════════════════════════════════
+const OB_STAGES=[
+  {k:'s30',d:30,label:'H+30 · Telepon cek kepuasan'},
+  {k:'s60',d:60,label:'H+60 · Tawarkan starter kit consumables'},
+  {k:'s90',d:90,label:'H+90 · Jadwalkan PM / kunjungan cek'}
+];
+// Rekomendasi consumables per keluarga mesin. Kode = SKU paling laris di Odoo, sebagai referensi — cocokkan dulu dengan model.
+const OB_FAMILIES=[
+  {key:'scrubber',re:/\b(BD|BR|B)\s?\d/i,label:'Scrubber',items:['Brush / pad sesuai diameter (ref. 4905-0260 Disc Brush Red D51 · 9753-0560 Brush Red D43 · 6369-7910 Pad Red 381 mm)','Rubber lip set depan + belakang (ref. 6273-2130 Standard · 6273-2070 Oil Resistant)','Detergen RM sesuai jenis lantai']},
+  {key:'vacuum',re:/\b(NT|T|VC|WD|CV|IVC|IVR)\s?\d/i,label:'Vacuum',items:['Filter bag cadangan (ref. 6904-2850 NT 65/2 · 2889-1550 Fleece 40–50 L · 2885-7530 Fleece 65–75 L)','Cartridge / flat filter (ref. 6907-0380 Cartridge Paper · 6904-3670 Flat Filter)']},
+  {key:'pw',re:/\b(HDS|HD|K)\s?\d/i,label:'Pressure washer',items:['HD hose cadangan (ref. 9751-0350 HD Hose DN6 10 m)','Power nozzle sesuai ukuran pompa (ref. 2883-3990 · 2883-8210)','Oli mesin / pompa (ref. 6288-0500 Engine Oil 1 L)','RM 110 Machine Protector — mencegah kerak (ref. 6295-9710)']},
+  {key:'sweeper',re:/\b(KM|S)\s?\d/i,label:'Sweeper',items:['Side broom (ref. 2884-9350 Spare Parts Set Side Broom)','Filter debu panel']},
+  {key:'steam',re:/\b(SG|SC|DE)\s?\d/i,label:'Steam cleaner',items:['Nozzle & kain microfibre cadangan','Descaler untuk boiler']},
+  {key:'extractor',re:/\b(PUZZI|SE)\b/i,label:'Spray extraction',items:['Nozzle upholstery / lantai','Detergen RM spray extraction']}
+];
+function obFamilies(products){
+  const seen=new Set(), out=[];
+  (products||[]).forEach(p=>{ const n=String(p).replace(/^\[[^\]]*\]\s*/,''); OB_FAMILIES.forEach(f=>{ if(!seen.has(f.key)&&f.re.test(n)){ seen.add(f.key); out.push(f); } }); });
+  return out;
+}
+function obState(inv){ if(!DB.onboarding||typeof DB.onboarding!=='object') DB.onboarding={}; return DB.onboarding[inv]||{}; }
+function obDue(dateStr,days){ const d=new Date(String(dateStr).slice(0,10)+'T00:00:00'); d.setDate(d.getDate()+days); return d; }
+function obToday(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
+// Tahap berikutnya yang belum selesai, dan apakah sudah jatuh tempo
+function obNext(o){
+  const st=obState(o.invoiceId);
+  if(st.skip) return {state:'skipped',st};
+  for(const sg of OB_STAGES){
+    if(st[sg.k]) continue;
+    const due=obDue(o.date,sg.d); const late=Math.floor((obToday()-due)/86400000);
+    return {state: late>=0?'due':'upcoming', stage:sg, due, late, st};
+  }
+  return {state:'done',st};
+}
+function waNumber(phone){
+  let d=String(phone||'').replace(/[^\d+]/g,''); if(!d) return '';
+  if(d.startsWith('+')) d=d.slice(1);
+  if(d.startsWith('0')) d='62'+d.slice(1);
+  return /^62\d{8,13}$/.test(d)?d:'';
+}
+function obMessage(o,stage){
+  const unit=(o.products||[]).map(p=>String(p).replace(/^\[[^\]]*\]\s*/,'')).slice(0,2).join(' & ')||'unit Kärcher';
+  const tgl=fmtDateOnly(o.date);
+  const fams=obFamilies(o.products);
+  if(stage.k==='s30') return `Selamat siang Bapak/Ibu,\n\nSaya ${currentUser&&currentUser.name||'Risma'} dari *Service Center Kärcher — PT Kalingga Tataraya*.\n\nKami ingin memastikan *${unit}* yang diterima pada ${tgl} sudah berjalan dengan baik. Apakah ada kendala pemakaian, atau operator yang perlu pelatihan singkat?\n\nKalau ada pertanyaan seputar mesin, Bapak/Ibu bisa langsung menghubungi nomor ini. Terima kasih 🙏`;
+  if(stage.k==='s60'){
+    const list=fams.length?fams.map(f=>f.items.map(i=>'• '+i.replace(/\s*\(ref\.[^)]*\)/,'')).join('\n')).join('\n'):'• Consumables sesuai model mesin';
+    return `Selamat siang Bapak/Ibu,\n\nSaya ${currentUser&&currentUser.name||'Risma'} dari *Service Center Kärcher — PT Kalingga Tataraya*.\n\nSetelah ±2 bulan pemakaian *${unit}*, biasanya beberapa komponen habis pakai mulai perlu disiapkan cadangannya supaya mesin tidak berhenti saat dibutuhkan:\n${list}\n\nStok tersedia di service center kami (Tambun, Bekasi) dan bisa dikirim. Boleh kami kirimkan penawarannya? 🙏`;
+  }
+  const pm=(o.amount||0)>=pmThreshold();
+  return pm
+    ? `Selamat siang Bapak/Ibu,\n\nSaya ${currentUser&&currentUser.name||'Risma'} dari *Service Center Kärcher — PT Kalingga Tataraya*.\n\nPembelian *${unit}* Bapak/Ibu mendapatkan *preventive maintenance gratis 3x dalam setahun*. Kami ingin menjadwalkan kunjungan PM pertama — kapan waktu yang paling sesuai minggu ini atau minggu depan? 🙏`
+    : `Selamat siang Bapak/Ibu,\n\nSaya ${currentUser&&currentUser.name||'Risma'} dari *Service Center Kärcher — PT Kalingga Tataraya*.\n\nSudah 3 bulan sejak *${unit}* digunakan. Kami menawarkan pengecekan kondisi mesin oleh teknisi kami — tanpa biaya jasa. Kapan waktu yang sesuai untuk kunjungan? 🙏`;
+}
+function obCopy(inv){
+  const m=(window._obMsg||{})[inv]||''; if(!m) return;
+  if(navigator.clipboard) navigator.clipboard.writeText(m).then(()=>toast('Pesan disalin — tempel di WhatsApp','ok')).catch(()=>prompt('Salin pesan ini:',m));
+  else prompt('Salin pesan ini:',m);
+}
+function updateObBadge(){
+  const el=document.getElementById('ob-badge'); if(!el) return;
+  const d=kpiState().data; const list=(d&&d.onboarding)||[];
+  const n=list.filter(o=>obNext(o).state==='due').length;
+  if(n>0){ el.textContent=n; el.style.display='inline-block'; } else el.style.display='none';
+}
+function obMark(inv,stageKey){
+  const note=prompt('Catatan hasil kontak (mis. "mesin OK, operator sudah paham" / "minta penawaran filter bag")'); if(note===null) return;
+  if(!DB.onboarding) DB.onboarding={};
+  const st=Object.assign({},DB.onboarding[inv]||{}); st[stageKey]={at:Date.now(),by:(currentUser&&currentUser.name)||'',note:note.trim()};
+  DB.onboarding[inv]=st; saveData(DB); renderView('onboarding'); toast('Tahap ditandai selesai','ok');
+}
+function obSkip(inv){
+  const reason=prompt('Alasan dilewati (mis. "reseller — end-user tidak diketahui" / "customer tidak mau dihubungi")'); if(!reason) return;
+  if(!DB.onboarding) DB.onboarding={};
+  const st=Object.assign({},DB.onboarding[inv]||{}); st.skip={at:Date.now(),by:(currentUser&&currentUser.name)||'',reason:reason.trim()};
+  DB.onboarding[inv]=st; saveData(DB); renderView('onboarding'); toast('Dilewati','info');
+}
+function obUnskip(inv){ if(!DB.onboarding||!DB.onboarding[inv]) return; const st=Object.assign({},DB.onboarding[inv]); delete st.skip; DB.onboarding[inv]=st; saveData(DB); renderView('onboarding'); }
+function obCard(o){
+  const n=obNext(o), st=n.st||{};
+  const chips=OB_STAGES.map(sg=>{ const x=st[sg.k]; const due=obDue(o.date,sg.d);
+    const col=x?'var(--green)':(obToday()>=due?'#f59e0b':'var(--t3)'); const ic=x?'✓':(obToday()>=due?'●':'○');
+    return `<span title="${esc(sg.label)}${x?' — '+esc(x.by)+': '+esc(x.note||''):' — jatuh tempo '+due.toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}" style="font-size:11px;color:${col};border:1px solid ${col}55;border-radius:12px;padding:2px 8px;white-space:nowrap">${ic} H+${sg.d}</span>`; }).join(' ');
+  const fams=obFamilies(o.products);
+  const wa=waNumber(o.phone);
+  const act = n.state==='due'||n.state==='upcoming' ? n.stage : null;
+  const msg = act ? obMessage(o,act) : '';
+  window._obMsg = window._obMsg || {}; window._obMsg[o.invoiceId] = msg;
+  const waBtn = act ? (wa?`<a class="btn btn-sm btn-y" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${wa}?text=${encodeURIComponent(msg)}">💬 WhatsApp</a>`:`<button class="btn btn-sm" onclick="obCopy('${o.invoiceId}')">📋 Salin pesan</button>`) : '';
+  return `<div style="background:var(--b0);border:1px solid ${n.state==='due'?(n.late>7?'rgba(255,90,90,.45)':'rgba(245,158,11,.45)'):'var(--b2)'};border-radius:var(--r);padding:12px 14px;margin-bottom:10px">
+    <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:14px;font-weight:700;color:var(--t1)">${esc(o.partner)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px"><span class="mono">${esc(o.invoice)}</span> · ${fmtDateOnly(o.date)} · ${rpShort(o.amount)}${o.amount>=pmThreshold()?' · <span style="color:var(--green)">eligible PM</span>':''}${o.boughtParts?' · <span style="color:var(--blue)">sudah beli parts</span>':''}</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:4px">${(o.products||[]).map(p=>esc(String(p).replace(/^\[[^\]]*\]\s*/,''))).join(' · ')}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:3px">${o.phone?'📞 '+esc(o.phone):'📞 <span style="color:#f59e0b">nomor belum ada di Odoo</span>'}${o.email?' · ✉️ '+esc(o.email):''}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">${chips}</div>
+    </div>
+    ${act?`<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:${n.state==='due'?(n.late>7?'var(--red)':'#f59e0b'):'var(--t3)'}">${esc(act.label)}${n.state==='due'?(n.late>0?` — terlambat ${n.late} hari`:' — hari ini'):` — ${n.due.toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}`}</span>
+      <span style="flex:1"></span>
+      ${waBtn}
+      ${n.state==='due'?`<button class="btn btn-sm btn-green" onclick="obMark('${o.invoiceId}','${act.k}')">✓ Selesai</button>`:''}
+      <button class="btn btn-sm" onclick="obSkip('${o.invoiceId}')">Lewati</button>
+    </div>`:''}
+    ${act&&act.k==='s60'&&fams.length?`<div style="margin-top:8px;font-size:11px;color:var(--t2);line-height:1.6;background:var(--b1);border-radius:6px;padding:7px 10px"><b style="color:var(--t1)">Rekomendasi consumables (${fams.map(f=>f.label).join(', ')}):</b><br>${fams.map(f=>f.items.map(i=>'• '+esc(i)).join('<br>')).join('<br>')}<br><span style="color:var(--t3)">Kode referensi = SKU terlaris di Odoo. Cocokkan dengan model mesin sebelum ditawarkan.</span></div>`:''}
+    ${n.state==='skipped'?`<div style="margin-top:8px;font-size:12px;color:var(--t3)">Dilewati: ${esc(st.skip.reason)} — ${esc(st.skip.by)} <button class="btn btn-sm" style="margin-left:6px" onclick="obUnskip('${o.invoiceId}')">Batalkan</button></div>`:''}
+  </div>`;
+}
+function viewOnboarding(){
+  const ks=kpiState(); const d=ks.data;
+  if((!d||Date.now()-ks.ts>KPI_STALE_MS)&&!ks.loading&&!ks.error) setTimeout(()=>loadKPI(false).then(()=>{ if(window.currentView==='onboarding') renderView('onboarding'); }),0);
+  const list=(d&&d.onboarding)||[];
+  const f=DB._obFilter||'due';
+  const groups={due:[],upcoming:[],done:[],skipped:[]};
+  list.forEach(o=>{ const n=obNext(o); groups[n.state].push({o,n}); });
+  groups.due.sort((a,b)=>b.n.late-a.n.late);
+  groups.upcoming.sort((a,b)=>a.n.due-b.n.due);
+  const tab=(k,l)=>`<button class="btn btn-sm ${f===k?'btn-y':''}" onclick="DB._obFilter='${k}';renderView('onboarding')">${l} (${groups[k].length})</button>`;
+  const rows=groups[f]||[];
+  const late7=groups.due.filter(x=>x.n.late>7).length;
+  return `
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="font-size:12px;color:var(--t2);line-height:1.5;max-width:760px">Setiap pembeli unit Kärcher (invoice 120 hari terakhir di Odoo) dihubungi tiga kali: <b>H+30</b> cek kepuasan, <b>H+60</b> tawarkan consumables, <b>H+90</b> jadwalkan PM / kunjungan. Tujuannya menjadikan Service Center tempat customer membeli parts sejak hari pertama.</div>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="loadKPI(true).then(()=>renderView('onboarding'))" ${ks.loading?'disabled':''}>${ks.loading?'⏳ Memuat…':'🔄 Refresh dari Odoo'}</button>
+  </div>
+  ${ks.error?`<div style="background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:12px;font-size:13px;color:var(--red)">⚠️ ${esc(ks.error)}</div>`:''}
+  ${late7?`<div style="background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:12px;font-size:13px;color:var(--red)">⚠️ ${late7} kontak terlambat lebih dari 7 hari.</div>`:''}
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tab('due','Perlu dihubungi')}${tab('upcoming','Akan datang')}${tab('done','Selesai')}${tab('skipped','Dilewati')}</div>
+  ${!d?`<div class="empty-row" style="padding:30px;text-align:center;color:var(--t3)">Memuat data pembeli unit dari Odoo…</div>`:
+    rows.length?rows.map(x=>obCard(x.o)).join(''):`<div class="empty-row" style="padding:30px;text-align:center;color:var(--t3)">${f==='due'?'Tidak ada yang perlu dihubungi hari ini 👍':'Kosong.'}</div>`}`;
 }
 
 // ─── AUTO-REFRESH (multi-computer) ───
@@ -3666,7 +3776,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (hash === '#ajukan' || hash === '#trial-request' || hash === '#sales') showTrialRequestPage();
 
-  // Initial cloud sync (silent — user already sees cached data immediately)
+  // Initial cloud sync — hanya untuk staff yang login (customer portal tidak memuat data apa pun)
+  if (!isLoggedIn()) { setSyncStatus('offline', 'Belum login'); return; }
+  applyUserToSidebar();
   if (cloudIsConfigured()) {
     setSyncStatus('syncing', 'Connecting...');
     const ok = await cloudRefresh(true);
