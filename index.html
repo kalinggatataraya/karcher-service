@@ -654,6 +654,7 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="sb-section">Sales</div>
     <button class="nav-item" onclick="goView('trials',this)"><span class="ico">🧪</span> Trial Unit <span id="trial-badge" class="trial-badge" style="display:none"></span></button>
     <button class="nav-item" onclick="goView('pm',this)"><span class="ico">🛡️</span> Preventive Maint. <span id="pm-badge" class="trial-badge" style="display:none"></span></button>
+    <button class="nav-item" onclick="goView('inquiry',this)"><span class="ico">📞</span> Inquiry Log <span id="inq-badge" class="trial-badge" style="display:none"></span></button>
 
     <div class="sb-section">Team</div>
     <button class="nav-item" onclick="goView('tech-schedule',this)"><span class="ico">🗓️</span> Jadwal Teknisi</button>
@@ -913,20 +914,95 @@ textarea { resize: vertical; min-height: 80px; }
 
 <!-- Catat PM Modal -->
 <div class="modal-bg" id="modal-pm">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:720px">
     <div class="modal-hd"><h2>Catat Kunjungan PM</h2><button class="modal-close" onclick="closeModal('modal-pm')">✕</button></div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:72vh;overflow:auto">
       <input type="hidden" id="pm-invoice"/>
       <div class="f-row"><div class="f-label">Entitlement</div><div id="pm-label" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
       <div class="f-grid2">
         <div class="f-row"><div class="f-label">Tanggal PM</div><input type="date" id="pm-date"/></div>
         <div class="f-row"><div class="f-label">Oleh</div><select id="pm-by"><option value="">— Pilih —</option></select></div>
       </div>
-      <div class="f-row"><div class="f-label">Catatan</div><textarea id="pm-note" placeholder="Hasil PM, kondisi unit…" style="min-height:60px"></textarea></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Model mesin</div><input type="text" id="pm-model" placeholder="mis. BD 50/50 C"/></div>
+        <div class="f-row"><div class="f-label">Serial / Hour meter</div><input type="text" id="pm-serial" placeholder="SN · jam"/></div>
+      </div>
+
+      <div class="f-row">
+        <div class="f-label">Checklist kondisi komponen <span style="color:var(--t3);font-weight:400">— klik untuk ubah: OK → Perhatian → Ganti → kosong</span></div>
+        <div id="pm-checklist" style="display:grid;grid-template-columns:1fr 1fr;gap:5px"></div>
+      </div>
+
+      <div class="f-row"><div class="f-label">Parts direkomendasikan <span style="color:var(--t3);font-weight:400">(1 baris per part: kode · nama · qty)</span></div><textarea id="pm-parts" placeholder="6273-2130 · Rubber lip set standard · 1&#10;6904-2850 · Filter bags NT 65/2 · 2" style="min-height:58px;font-family:var(--mono);font-size:12px"></textarea></div>
+
+      <div style="background:var(--b1);border:1px solid var(--yd2);border-radius:var(--r);padding:11px 13px;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--y);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:8px">Hasil kunjungan — ini yang diukur</div>
+        <div class="f-grid2">
+          <div class="f-row"><div class="f-label">Quotation dibuat?</div>
+            <select id="pm-quote" onchange="pmQuoteToggle()"><option value="no">Tidak</option><option value="yes">Ya</option></select></div>
+          <div class="f-row"><div class="f-label">Nilai quotation (Rp)</div><input type="number" id="pm-quote-val" placeholder="0" min="0" step="1000"/></div>
+        </div>
+        <div class="f-row" id="pm-quote-reason-row"><div class="f-label">Alasan tidak ada quotation</div><input type="text" id="pm-quote-reason" placeholder="mis. semua komponen masih OK / customer tidak mau"/></div>
+        <div class="f-grid2">
+          <div class="f-row"><div class="f-label">Order</div>
+            <select id="pm-order"><option value="none">Belum / tidak ada</option><option value="onsite">Langsung diganti di tempat</option><option value="po">Menunggu PO customer</option><option value="won">Order masuk (SO terbit)</option><option value="lost">Ditolak</option></select></div>
+          <div class="f-row"><div class="f-label">Nilai order (Rp)</div><input type="number" id="pm-order-val" placeholder="0" min="0" step="1000"/></div>
+        </div>
+        <div class="f-row"><div class="f-label">Nomor SO Odoo <span style="color:var(--t3);font-weight:400">(kalau sudah terbit)</span></div><input type="text" id="pm-so" placeholder="S0xxxx"/></div>
+      </div>
+
+      <div class="f-row"><div class="f-label">Catatan teknisi</div><textarea id="pm-note" placeholder="Tindakan yang dilakukan, kondisi unit…" style="min-height:52px"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-pm')">Batal</button>
       <button class="btn btn-y" onclick="savePM()">Simpan PM</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Inquiry Modal -->
+<div class="modal-bg" id="modal-inq">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hd"><h2 id="inq-title">Catat Inquiry</h2><button class="modal-close" onclick="closeModal('modal-inq')">✕</button></div>
+    <div class="modal-body" style="max-height:72vh;overflow:auto">
+      <input type="hidden" id="inq-id"/>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Tanggal masuk</div><input type="date" id="inq-date"/></div>
+        <div class="f-row"><div class="f-label">Channel</div><select id="inq-channel"><option>WhatsApp</option><option>Telepon</option><option>Email</option><option>Website</option><option>Walk-in</option><option>Dari Sales</option><option>Dari PM</option></select></div>
+      </div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Customer *</div><input type="text" id="inq-customer" placeholder="Nama perusahaan / orang"/></div>
+        <div class="f-row"><div class="f-label">Telepon / WA</div><input type="text" id="inq-phone" placeholder="08…"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Kebutuhan *</div><textarea id="inq-need" placeholder="Apa yang dicari customer — model mesin, part, gejala…" style="min-height:52px"></textarea></div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Kode part / SKU</div><input type="text" id="inq-sku" placeholder="mis. 6273-2130"/></div>
+        <div class="f-row"><div class="f-label">Qty</div><input type="number" id="inq-qty" min="0" placeholder="0"/></div>
+      </div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Status</div>
+          <select id="inq-status">
+            <option value="new">Baru — belum dibalas</option>
+            <option value="replied">Sudah dibalas</option>
+            <option value="quoted">Ditawarkan (quotation)</option>
+            <option value="won">Menang — order masuk</option>
+            <option value="lost">Kalah — pilih tempat lain</option>
+            <option value="nostock">Kalah — tidak ada stok</option>
+            <option value="noreply">Tidak ada respons customer</option>
+          </select></div>
+        <div class="f-row"><div class="f-label">Ditangani oleh</div><select id="inq-by"><option value="">— Pilih —</option></select></div>
+      </div>
+      <div class="f-grid2">
+        <div class="f-row"><div class="f-label">Nilai (Rp)</div><input type="number" id="inq-val" min="0" step="1000" placeholder="0"/></div>
+        <div class="f-row"><div class="f-label">Nomor SO Odoo</div><input type="text" id="inq-so" placeholder="kalau menang"/></div>
+      </div>
+      <div class="f-row"><div class="f-label">Catatan</div><textarea id="inq-note" style="min-height:44px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-red btn-sm" id="inq-del" onclick="deleteInquiry()" style="margin-right:auto;display:none">Hapus</button>
+      <button class="btn" onclick="closeModal('modal-inq')">Batal</button>
+      <button class="btn btn-y" onclick="saveInquiry()">Simpan</button>
     </div>
   </div>
 </div>
@@ -1357,6 +1433,7 @@ function goCustomer() {
   document.getElementById('pg-customer').classList.add('active');
 }
 function goView(view, el) {
+  if (view!=='tickets') DB._staleOnly=false;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
   if (el) el.classList.add('on');
   renderView(view);
@@ -1461,7 +1538,7 @@ async function trackTicket() {
 // ═══════════════════════════════════════════════
 function renderView(view) {
   window.currentView = view;
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', inquiry:'Inquiry Log', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
 
@@ -1484,6 +1561,7 @@ function renderView(view) {
   else if (view==='technicians') c.innerHTML = viewTechnicians();
   else if (view==='trials') c.innerHTML = viewTrials();
   else if (view==='pm') c.innerHTML = viewPM();
+  else if (view==='inquiry') c.innerHTML = viewInquiry();
   else if (view==='tech-schedule') c.innerHTML = viewTechSchedule();
   else if (view==='settings') c.innerHTML = viewSettings();
 
@@ -1499,6 +1577,7 @@ function renderView(view) {
 
   updateTrialBadge();
   updatePMBadge();
+  if (typeof updateInqBadge==='function') updateInqBadge();
 }
 
 // ─── DASHBOARD ───
@@ -1529,7 +1608,24 @@ function viewDashboard() {
   });
   const maxD = Math.max(...days.map(d=>d.count),1);
 
+  const stale=staleTickets();
+  const staleIndent=stale.filter(x=>x.status==='indent-part');
+  const staleBlock=stale.length?`
+  <div style="background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:12px 14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--red)">⚠️ ${stale.length} ticket tanpa update ≥ ${STALE_DAYS} hari${staleIndent.length?` · ${staleIndent.length} di antaranya Indent Part`:''}</div>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="ticketFilter='all';ticketSearch='';DB._staleOnly=true;goView('tickets',document.querySelectorAll('.nav-item')[1])">Lihat semua</button>
+    </div>
+    ${stale.slice(0,5).map(x=>`<div onclick="openStatusModal('${x.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,90,90,.15);font-size:12px">
+      <span class="mono" style="color:var(--t3)">${esc(x.id)}</span>
+      <span class="bold" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.customer)} <span style="color:var(--t3);font-weight:400">· ${esc(x.machine)}</span></span>
+      <span class="status-badge s-${x.status}" style="font-size:10px">${statusLabel(x.status)}</span>
+      <span style="color:var(--red);font-weight:700;white-space:nowrap">${staleDays(x)} hari</span>
+    </div>`).join('')}
+  </div>`:'';
+
   return `
+  ${staleBlock}
   <div class="kpi-row">
     <div class="kpi yellow"><div class="kpi-label">Open Tickets</div><div class="kpi-val" style="color:var(--y)">${open}</div><div class="kpi-sub">Active service jobs</div><div class="kpi-icon">🔧</div></div>
     <div class="kpi green"><div class="kpi-label">Ready for Pickup</div><div class="kpi-val" style="color:var(--green)">${done}</div><div class="kpi-sub">Awaiting collection</div><div class="kpi-icon">✅</div></div>
@@ -1602,17 +1698,24 @@ function viewTickets(filter) {
     );
   }
   if (ticketFilter !== 'all') tickets = tickets.filter(t => t.status === ticketFilter);
+  if (DB._staleOnly) tickets = tickets.filter(t => isActiveTicket(t) && staleDays(t) >= STALE_DAYS);
   if (ticketSort==='created_asc') tickets.sort((a,b)=>a.createdAt-b.createdAt);
   else if (ticketSort==='created_desc') tickets.sort((a,b)=>b.createdAt-a.createdAt);
   else tickets.sort((a,b)=>b.updatedAt-a.updatedAt);
   const sortOpts=[['updated_desc','Terbaru diperbarui'],['created_desc','Terbaru dibuat'],['created_asc','Terlama → terbaru']];
   const selStyle="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:6px 10px;outline:none;margin-right:8px";
+  const staleBanner = DB._staleOnly ? `
+  <div style="display:flex;align-items:center;gap:10px;background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 14px;margin-bottom:12px">
+    <span style="font-size:13px;color:var(--t1)">⚠️ Hanya ticket <b style="color:var(--red)">tanpa update ≥ ${STALE_DAYS} hari</b> — ${tickets.length} ticket</span>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="DB._staleOnly=false;renderView('tickets')">✕ Tampilkan semua</button>
+  </div>` : '';
   const searchBanner = sq ? `
   <div style="display:flex;align-items:center;gap:10px;background:var(--yd);border:1px solid var(--yd2);border-radius:var(--r);padding:9px 14px;margin-bottom:12px">
     <span style="font-size:13px;color:var(--t1)">🔍 Hasil pencarian untuk <b style="color:var(--y)">"${esc(ticketSearch)}"</b> — <b>${tickets.length}</b> ticket ditemukan${ticketFilter!=='all'?` <span style="color:var(--t3)">(difilter: ${esc(ticketFilter)})</span>`:''}</span>
     <button class="btn btn-sm" style="margin-left:auto" onclick="clearTicketSearch()">✕ Hapus pencarian</button>
   </div>` : '';
   return `
+  ${staleBanner}
   ${searchBanner}
   <div class="filter-row">
     ${filters.map(f=>`<div class="filter-chip ${ticketFilter===f.k?'on':''}" onclick="ticketFilter='${f.k}';renderView('tickets')">${f.l} ${f.k==='all'?'('+DB.tickets.length+')':''}</div>`).join('')}
@@ -1631,7 +1734,7 @@ function viewTickets(filter) {
         <td>${prioBadge(t.priority)}</td>
         <td>${t.tech?`<span class="tech-chip"><span class="dot" style="background:${techColor(t.tech)}"></span>${esc(t.tech)}</span>`:'<span class="muted">Unassigned</span>'}</td>
         <td><span class="status-badge s-${t.status}">${statusLabel(t.status)}</span></td>
-        <td><span class="muted">${relTime(t.updatedAt)}</span></td>
+        <td>${isActiveTicket(t)&&staleDays(t)>=STALE_DAYS?`<span style="color:var(--red);font-weight:700" title="Tanpa update ${staleDays(t)} hari">⚠ ${staleDays(t)}d</span>`:`<span class="muted">${relTime(t.updatedAt)}</span>`}</td>
         <td>
           <div class="btn-row">
             <button class="btn btn-sm" onclick="openStatusModal('${t.id}')">Update</button>
@@ -1712,6 +1815,75 @@ function viewSiteVisits(){
 }
 
 // ─── PRODUCTIVITY (jumlah service ticket + site visit per teknisi) ───
+// ─── SCORECARD MINGGUAN PER TEKNISI ───
+function weekRange(offset){ // offset 0 = minggu ini (Senin–Minggu)
+  const d=new Date(); d.setHours(0,0,0,0);
+  const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow-7*offset);
+  const start=d.getTime(); const end=start+7*86400000;
+  return {start,end,label:new Date(start).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})+' – '+new Date(end-86400000).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})};
+}
+function techScore(name,start,end){
+  const inWin=ts=>ts>=start&&ts<end;
+  // PM visits oleh teknisi ini dalam minggu (berdasarkan tanggal PM)
+  const pmVis=[]; const pv=(DB.pm&&DB.pm.visits)||{};
+  Object.values(pv).forEach(arr=>(arr||[]).forEach(v=>{ if(v.by===name&&inWin(new Date(v.date+'T00:00:00').getTime())) pmVis.push(v); }));
+  const pmQuote=pmVis.filter(v=>v.quote&&v.quote.issued).length;
+  const pmOrder=pmVis.filter(v=>v.order&&['won','onsite','po'].includes(v.order.status)).length;
+  const pmOrderVal=pmVis.reduce((a,v)=>a+((v.order&&['won','onsite','po'].includes(v.order.status))?(v.order.value||0):0),0);
+  const pmQuoteVal=pmVis.reduce((a,v)=>a+((v.quote&&v.quote.issued)?(v.quote.value||0):0),0);
+  // Ticket yang selesai (done/delivered) dalam minggu — ambil ts dari history
+  const closed=[]; DB.tickets.forEach(t=>{
+    if(t.tech!==name||!Array.isArray(t.history)) return;
+    const h=t.history.find(x=>/Done|Ready|Delivered/i.test(x.action||''));
+    if(h&&inWin(h.ts)) closed.push({t,doneTs:h.ts});
+  });
+  const tat=closed.length?closed.reduce((a,c)=>a+(c.doneTs-c.t.createdAt)/86400000,0)/closed.length:null;
+  // Site visit selesai dalam minggu
+  const visDone=DB.visits.filter(v=>v.tech===name&&v.status==='completed'&&inWin(new Date(v.date+'T00:00:00').getTime())).length;
+  return {pm:pmVis.length,pmQuote,pmOrder,pmOrderVal,pmQuoteVal,conv:pmVis.length?Math.round(pmOrder/pmVis.length*100):null,closed:closed.length,tat,visDone};
+}
+function viewScorecard(){
+  const wk=Number(DB._scWeek||0); const w=weekRange(wk);
+  const techs=DB.technicians;
+  const rows=techs.map(t=>({t,s:techScore(t.name,w.start,w.end)}));
+  const tot=rows.reduce((a,r)=>({pm:a.pm+r.s.pm,pmQuote:a.pmQuote+r.s.pmQuote,pmOrder:a.pmOrder+r.s.pmOrder,pmOrderVal:a.pmOrderVal+r.s.pmOrderVal,closed:a.closed+r.s.closed,visDone:a.visDone+r.s.visDone}),{pm:0,pmQuote:0,pmOrder:0,pmOrderVal:0,closed:0,visDone:0});
+  const convCol=c=>c==null?'var(--t3)':c>=65?'var(--green)':c>=40?'#f59e0b':'var(--red)';
+  const fmtRpJt=v=>v?('Rp '+(v>=1e6?Math.round(v/1e5)/10+' jt':Math.round(v/1e3)+' rb')):'—';
+  return `
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><h3>Scorecard Mingguan</h3>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:12px">
+        <button class="btn btn-sm" onclick="DB._scWeek=${wk+1};renderView('productivity')">‹</button>
+        <span style="font-size:12px;color:var(--t2);min-width:150px;text-align:center">${wk===0?'Minggu ini':wk===1?'Minggu lalu':wk+' minggu lalu'} · ${w.label}</span>
+        <button class="btn btn-sm" onclick="DB._scWeek=${Math.max(0,wk-1)};renderView('productivity')" ${wk===0?'disabled':''}>›</button>
+      </div>
+      <div class="sep"></div>
+      <span style="font-size:11px;color:var(--t3)">Target konversi PM: 65% · Konversi = PM yang menghasilkan order ÷ PM dilakukan</span>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>Teknisi</th><th>PM dilakukan</th><th>PM + quote</th><th>PM + order</th><th>Konversi</th><th>Nilai order PM</th><th>Site visit selesai</th><th>Ticket selesai</th><th>Rata² TAT</th></tr></thead>
+      <tbody>
+      ${rows.map(({t,s})=>`<tr>
+        <td><span class="tech-chip"><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</span></td>
+        <td class="bold">${s.pm}</td>
+        <td>${s.pmQuote}${s.pm?` <span class="muted">(${Math.round(s.pmQuote/s.pm*100)}%)</span>`:''}</td>
+        <td>${s.pmOrder}</td>
+        <td><span style="font-weight:800;color:${convCol(s.conv)}">${s.conv==null?'—':s.conv+'%'}</span></td>
+        <td>${fmtRpJt(s.pmOrderVal)}</td>
+        <td>${s.visDone}</td>
+        <td>${s.closed}</td>
+        <td>${s.tat==null?'<span class="muted">—</span>':s.tat.toFixed(1)+' hari'}</td>
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--b2)">
+        <td class="bold">Total tim</td><td class="bold">${tot.pm}</td><td class="bold">${tot.pmQuote}</td><td class="bold">${tot.pmOrder}</td>
+        <td><span style="font-weight:800;color:${convCol(tot.pm?Math.round(tot.pmOrder/tot.pm*100):null)}">${tot.pm?Math.round(tot.pmOrder/tot.pm*100)+'%':'—'}</span></td>
+        <td class="bold">${fmtRpJt(tot.pmOrderVal)}</td><td class="bold">${tot.visDone}</td><td class="bold">${tot.closed}</td><td></td>
+      </tr>
+      </tbody>
+    </table>
+    ${tot.pm===0?'<div style="padding:10px 14px;font-size:12px;color:var(--t3)">Belum ada PM tercatat di minggu ini. Angka muncul begitu teknisi mencatat PM lewat tombol <b>+ Catat PM</b> dengan hasil kunjungan terisi.</div>':''}
+  </div>`;
+}
 function viewProductivity(){
   const allT=DB.tickets, allV=DB.visits;
   const rows=DB.technicians.map(t=>{
@@ -1724,6 +1896,7 @@ function viewProductivity(){
   }).sort((a,b)=>b.total-a.total);
   const maxTotal=Math.max(1,...rows.map(r=>r.total));
   return `
+  ${viewScorecard()}
   <div style="font-size:13px;color:var(--t2);margin-bottom:14px">Produktivitas = total aktivitas teknisi (<b>jumlah Service Ticket + Site Visit</b>).</div>
   <div class="tech-cards">
     ${rows.map((r,i)=>`<div class="tech-card">
@@ -2618,7 +2791,19 @@ function viewPM(){
   const stMap={overdue:['Terlambat','#ff5a5a'],due:['Jatuh Tempo','#f59e0b'],active:['Berjalan','#3ecf8e'],completed:['Selesai 3/3','#8892aa'],expired:['Kadaluarsa','#8892aa'],cancelled:['Dibatalkan','#8892aa']};
   const cards=shown.map(({e,c})=>{
     const st=stMap[c.status]||stMap.active;
-    const vis=c.visits.map((v,i)=>`<div style="font-size:12px;color:var(--t2);margin-top:3px">PM ${i+1}: <b style="color:var(--t1)">${fmtDateOnly(v.date)}</b>${v.by?' · '+esc(v.by):''}${v.note?` <span style="color:var(--t3)">— ${esc(v.note)}</span>`:''}</div>`).join('');
+    const vis=c.visits.map((v,i)=>{
+      const q=v.quote||{}, o=v.order||{};
+      let out='';
+      if(o.status==='won'||o.status==='onsite') out=`<span style="background:rgba(62,207,142,.15);color:var(--green);border:1px solid rgba(62,207,142,.4);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px">✅ ORDER${o.value?' Rp '+Math.round(o.value).toLocaleString('id-ID'):''}</span>`;
+      else if(o.status==='po') out=`<span style="background:rgba(90,180,255,.15);color:var(--blue);border:1px solid rgba(90,180,255,.4);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px">⏳ TUNGGU PO</span>`;
+      else if(q.issued) out=`<span style="background:var(--yd);color:var(--y);border:1px solid var(--yd2);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px">💰 QUOTE${q.value?' Rp '+Math.round(q.value).toLocaleString('id-ID'):''}</span>`;
+      else if(o.status==='lost') out=`<span style="background:rgba(255,90,90,.12);color:var(--red);border:1px solid rgba(255,90,90,.35);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px">✕ DITOLAK</span>`;
+      else if(v.checklist) out=`<span style="color:var(--t3);font-size:10px;margin-left:6px">tanpa quote${q.reason?': '+esc(q.reason):''}</span>`;
+      const ganti=v.checklist?Object.values(v.checklist).filter(x=>x==='ganti').length:0;
+      const perh=v.checklist?Object.values(v.checklist).filter(x=>x==='perh').length:0;
+      const cond=(ganti||perh)?` <span style="color:var(--t3);font-size:10px">· ${ganti?ganti+' ganti':''}${ganti&&perh?', ':''}${perh?perh+' perhatian':''}</span>`:'';
+      return `<div style="font-size:12px;color:var(--t2);margin-top:3px">PM ${i+1}: <b style="color:var(--t1)">${fmtDateOnly(v.date)}</b>${v.by?' · '+esc(v.by):''}${out}${cond}${v.note?` <span style="color:var(--t3)">— ${esc(v.note)}</span>`:''}</div>`;
+    }).join('');
     const eid=esc(String(e.invoiceId));
     const meta=((DB.pm&&DB.pm.meta)||{})[e.invoiceId]||{};
     let actions='';
@@ -2681,12 +2866,46 @@ async function syncPM(){
   }catch(e){ toast('Sync gagal: '+e.message,'err'); }
   if(btn){ btn.disabled=false; btn.textContent='🔄 Sync dari Odoo'; }
 }
+const PM_ITEMS=[
+  ['brush','Brush / Pad / Roller'],['lip','Rubber lip / Squeegee'],['filter','Filter (bag/cartridge/HEPA)'],['hose','Suction hose / Hose assy'],
+  ['nozzle','Nozzle / Jet pipe'],['gun','Trigger gun / Pistol'],['pump','Pump / Seal / O-ring'],['oil','Oli mesin / pompa / gear'],
+  ['battery','Battery & Charger'],['motor','Motor (vac/brush/drive)'],['electric','Switch / Kabel / Plug'],['wheel','Wheel / Caster / Bumper'],
+  ['tank','Tank solution & recovery'],['broom','Side broom / Belt']
+];
+const PM_STATE_NEXT={'':'ok','ok':'perh','perh':'ganti','ganti':''};
+const PM_STATE_UI={'':['—','var(--t3)','var(--b1)'],'ok':['OK','var(--green)','rgba(62,207,142,.12)'],'perh':['PERHATIAN','#f59e0b','rgba(245,158,11,.12)'],'ganti':['GANTI','var(--red)','rgba(255,90,90,.12)']};
+let _pmChecklist={};
+function pmRenderChecklist(){
+  const box=document.getElementById('pm-checklist'); if(!box) return;
+  box.innerHTML=PM_ITEMS.map(([k,l])=>{
+    const st=_pmChecklist[k]||''; const [lbl,col,bg]=PM_STATE_UI[st];
+    return `<div onclick="pmToggle('${k}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${bg};border:1px solid var(--b2);border-radius:6px;padding:6px 9px;user-select:none">
+      <span style="font-size:12px;color:var(--t1)">${l}</span>
+      <span style="font-size:10px;font-weight:800;letter-spacing:.04em;color:${col};min-width:62px;text-align:right">${lbl}</span></div>`;
+  }).join('');
+}
+function pmToggle(k){ _pmChecklist[k]=PM_STATE_NEXT[_pmChecklist[k]||'']; pmRenderChecklist(); }
+function pmQuoteToggle(){
+  const q=document.getElementById('pm-quote').value;
+  const row=document.getElementById('pm-quote-reason-row'); if(row) row.style.display=q==='yes'?'none':'';
+}
 function openPM(invoiceId){
   const e=((DB.pm&&DB.pm.entitlements)||[]).find(x=>String(x.invoiceId)===String(invoiceId)); if(!e) return;
+  const meta=((DB.pm&&DB.pm.meta)||{})[invoiceId]||{};
   document.getElementById('pm-invoice').value=invoiceId;
   document.getElementById('pm-label').textContent=e.partner+' · '+e.invoice;
   document.getElementById('pm-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pm-model').value=meta.machine||e.machine||'';
+  document.getElementById('pm-serial').value='';
+  document.getElementById('pm-parts').value='';
+  document.getElementById('pm-quote').value='no';
+  document.getElementById('pm-quote-val').value='';
+  document.getElementById('pm-quote-reason').value='';
+  document.getElementById('pm-order').value='none';
+  document.getElementById('pm-order-val').value='';
+  document.getElementById('pm-so').value='';
   document.getElementById('pm-note').value='';
+  _pmChecklist={}; pmRenderChecklist(); pmQuoteToggle();
   document.getElementById('pm-by').innerHTML='<option value="">— Pilih —</option><option>Tim Sales</option>'+DB.technicians.map(t=>`<option>${esc(t.name)}</option>`).join('');
   openModal('modal-pm');
 }
@@ -2696,27 +2915,34 @@ function savePM(){
   const by=document.getElementById('pm-by').value;
   const note=document.getElementById('pm-note').value.trim();
   if(!date){ toast('Isi tanggal PM','err'); return; }
+  if(!by){ toast('Pilih siapa yang melakukan PM','err'); return; }
+  const quoteIssued=document.getElementById('pm-quote').value==='yes';
+  const quoteVal=Number(document.getElementById('pm-quote-val').value)||0;
+  const orderStatus=document.getElementById('pm-order').value;
+  const orderVal=Number(document.getElementById('pm-order-val').value)||0;
+  const so=document.getElementById('pm-so').value.trim();
+  const nGanti=Object.values(_pmChecklist).filter(v=>v==='ganti').length;
+  const nPerh=Object.values(_pmChecklist).filter(v=>v==='perh').length;
+  if((nGanti>0||nPerh>0)&&!quoteIssued&&!document.getElementById('pm-quote-reason').value.trim()){
+    toast('Ada komponen Perhatian/Ganti tapi tidak ada quotation — isi alasannya','err'); return;
+  }
+  if(orderStatus==='won'&&!so){ toast('Order masuk — isi nomor SO Odoo','err'); return; }
   if(!DB.pm) DB.pm={entitlements:[],visits:{}};
   if(!DB.pm.visits) DB.pm.visits={};
   const arr=DB.pm.visits[id]||[];
   if(arr.length>=3){ toast('Jatah 3x PM sudah penuh','err'); return; }
-  arr.push({date,by,note,ts:Date.now()});
+  arr.push({
+    date,by,note,ts:Date.now(),
+    model:document.getElementById('pm-model').value.trim(),
+    serial:document.getElementById('pm-serial').value.trim(),
+    checklist:{..._pmChecklist},
+    partsRec:document.getElementById('pm-parts').value.trim(),
+    quote:{issued:quoteIssued,value:quoteIssued?quoteVal:0,reason:quoteIssued?'':document.getElementById('pm-quote-reason').value.trim()},
+    order:{status:orderStatus,value:orderVal,so}
+  });
   DB.pm.visits[id]=arr;
-  saveData(DB); closeModal('modal-pm'); renderView('pm'); toast('PM dicatat','ok');
-}
-function openPMInfo(id){
-  const e=((DB.pm&&DB.pm.entitlements)||[]).find(x=>String(x.invoiceId)===String(id));
-  const meta=((DB.pm&&DB.pm.meta)||{})[id]||{};
-  document.getElementById('pmi-invoice').value=id;
-  document.getElementById('pmi-label').textContent=e?(e.partner+' · '+e.invoice):id;
-  const mEl=document.getElementById('pmi-machine'); mEl.value=meta.machine||''; mEl.placeholder = (e&&e.machine)?('Odoo: '+e.machine):'mis. HD 6/15, K5 Premium';
-  const sEl=document.getElementById('pmi-sales'); sEl.value=meta.sales||''; sEl.placeholder = (e&&e.salesman)?('Odoo: '+e.salesman):'Nama salesman';
-  const metas=Object.values((DB.pm&&DB.pm.meta)||{});
-  const machines=[...new Set(metas.map(m=>m.machine).filter(Boolean))].sort();
-  const sales=[...new Set([...metas.map(m=>m.sales).filter(Boolean), ...getSalesManagers().map(m=>m.name)])].sort();
-  document.getElementById('pmi-machine-list').innerHTML=machines.map(x=>`<option value="${esc(x)}"></option>`).join('');
-  document.getElementById('pmi-sales-list').innerHTML=sales.map(x=>`<option value="${esc(x)}"></option>`).join('');
-  openModal('modal-pminfo');
+  saveData(DB); closeModal('modal-pm'); renderView('pm');
+  toast(quoteIssued?('PM dicatat · quotation Rp '+quoteVal.toLocaleString('id-ID')):'PM dicatat','ok');
 }
 function savePMInfo(){
   const id=document.getElementById('pmi-invoice').value;
@@ -3063,6 +3289,130 @@ function viewTechSchedule(){
     ${techs.length ? cards : `<div class="empty-row" style="text-align:center;color:var(--t3);padding:40px">Belum ada teknisi terdaftar. Tambahkan di menu <b>Technicians</b>.</div>`}
   `;
 }
+
+// ═══════════════════════════════════════════════
+// INQUIRY LOG — setiap WA/telepon/email/web yang masuk ke SC
+// ═══════════════════════════════════════════════
+const INQ_STATUS={new:['Baru','var(--y)'],replied:['Dibalas','var(--blue)'],quoted:['Ditawarkan','#f59e0b'],won:['Menang','var(--green)'],lost:['Kalah','var(--red)'],nostock:['Tidak ada stok','var(--red)'],noreply:['No response','var(--t3)']};
+function inqList(){ if(!Array.isArray(DB.inquiries)) DB.inquiries=[]; return DB.inquiries; }
+function updateInqBadge(){
+  const el=document.getElementById('inq-badge'); if(!el) return;
+  const n=inqList().filter(i=>i.status==='new').length;
+  if(n>0){ el.textContent=n; el.style.display='inline-block'; } else el.style.display='none';
+}
+function openInquiry(id){
+  const list=inqList();
+  const it=id?list.find(x=>x.id===id):null;
+  document.getElementById('inq-id').value=it?it.id:'';
+  document.getElementById('inq-title').textContent=it?('Inquiry '+it.id):'Catat Inquiry';
+  document.getElementById('inq-date').value=it?it.date:todayStr();
+  document.getElementById('inq-channel').value=it?it.channel:'WhatsApp';
+  document.getElementById('inq-customer').value=it?it.customer:'';
+  document.getElementById('inq-phone').value=it?(it.phone||''):'';
+  document.getElementById('inq-need').value=it?it.need:'';
+  document.getElementById('inq-sku').value=it?(it.sku||''):'';
+  document.getElementById('inq-qty').value=it?(it.qty||''):'';
+  document.getElementById('inq-status').value=it?it.status:'new';
+  document.getElementById('inq-val').value=it?(it.value||''):'';
+  document.getElementById('inq-so').value=it?(it.so||''):'';
+  document.getElementById('inq-note').value=it?(it.note||''):'';
+  const by=document.getElementById('inq-by');
+  const names=['Risma','Doni','Danih'].concat(DB.technicians.map(t=>t.name)).filter((v,i,a)=>a.indexOf(v)===i);
+  by.innerHTML='<option value="">— Pilih —</option>'+names.map(n=>`<option>${esc(n)}</option>`).join('');
+  by.value=it?(it.by||''):(currentUser&&currentUser.name?currentUser.name:'');
+  if(by.value!==(it?(it.by||''):(currentUser&&currentUser.name?currentUser.name:''))) by.value='';
+  document.getElementById('inq-del').style.display=it?'':'none';
+  openModal('modal-inq');
+  setTimeout(()=>document.getElementById('inq-customer').focus(),80);
+}
+function saveInquiry(){
+  const id=document.getElementById('inq-id').value;
+  const customer=document.getElementById('inq-customer').value.trim();
+  const need=document.getElementById('inq-need').value.trim();
+  if(!customer||!need){ toast('Isi customer dan kebutuhan','err'); return; }
+  const status=document.getElementById('inq-status').value;
+  const so=document.getElementById('inq-so').value.trim();
+  if(status==='won'&&!so){ toast('Status Menang — isi nomor SO Odoo','err'); return; }
+  const rec={
+    date:document.getElementById('inq-date').value||todayStr(),
+    channel:document.getElementById('inq-channel').value,
+    customer, phone:document.getElementById('inq-phone').value.trim(), need,
+    sku:document.getElementById('inq-sku').value.trim(), qty:Number(document.getElementById('inq-qty').value)||0,
+    status, by:document.getElementById('inq-by').value,
+    value:Number(document.getElementById('inq-val').value)||0, so,
+    note:document.getElementById('inq-note').value.trim(), updatedAt:Date.now()
+  };
+  const list=inqList();
+  if(id){ const it=list.find(x=>x.id===id); if(it){ Object.assign(it,rec); if(!it.history) it.history=[]; it.history.push({ts:Date.now(),status}); } }
+  else { rec.id=nextSeq('INQ',list,4); rec.createdAt=Date.now(); rec.history=[{ts:Date.now(),status}]; list.push(rec); }
+  saveData(DB); closeModal('modal-inq'); renderView('inquiry'); toast('Inquiry disimpan','ok');
+}
+function deleteInquiry(){
+  const id=document.getElementById('inq-id').value; if(!id) return;
+  if(!confirm('Hapus inquiry '+id+'?')) return;
+  DB.inquiries=inqList().filter(x=>x.id!==id);
+  saveData(DB); closeModal('modal-inq'); renderView('inquiry'); toast('Inquiry dihapus','info');
+}
+function viewInquiry(){
+  const list=inqList();
+  const f=DB._inqFilter||'all';
+  const q=(DB._inqSearch||'').toLowerCase();
+  const period=DB._inqPeriod||'30';
+  const cutoff=period==='all'?0:Date.now()-Number(period)*86400000;
+  let rows=list.filter(i=>!cutoff||new Date(i.date+'T00:00:00').getTime()>=cutoff);
+  const counts={all:rows.length}; Object.keys(INQ_STATUS).forEach(k=>counts[k]=rows.filter(i=>i.status===k).length);
+  const won=rows.filter(i=>i.status==='won'); const lostStock=counts.nostock;
+  const closed=rows.filter(i=>['won','lost','nostock','noreply'].includes(i.status)).length;
+  const conv=closed?Math.round(won.length/closed*100):0;
+  const wonVal=won.reduce((a,i)=>a+(i.value||0),0);
+  const lostStockVal=rows.filter(i=>i.status==='nostock').reduce((a,i)=>a+(i.value||0),0);
+  if(f!=='all') rows=rows.filter(i=>i.status===f);
+  if(q) rows=rows.filter(i=>[i.id,i.customer,i.need,i.sku,i.phone,i.by].some(x=>String(x||'').toLowerCase().includes(q)));
+  rows.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const tab=(k,l)=>`<button class="btn btn-sm ${f===k?'btn-y':''}" onclick="DB._inqFilter='${k}';renderView('inquiry')">${l} (${counts[k]||0})</button>`;
+  const kpi=(l,v,c,sub)=>`<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-val" style="color:${c}">${v}</div><div class="kpi-sub">${sub}</div></div>`;
+  const stale=list.filter(i=>i.status==='new'&&Date.now()-(i.createdAt||0)>4*3600000).length;
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="font-size:12px;color:var(--t2)">Setiap WA / telepon / email / web yang masuk ke SC dicatat di sini — termasuk yang kalah dan yang tidak ada stok. Target respons: 15 menit jam kerja.</div>
+    <button class="btn btn-y btn-sm" onclick="openInquiry()">+ Catat Inquiry</button>
+  </div>
+  ${stale?`<div style="background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:12px;font-size:13px;color:var(--red)">⚠️ <b>${stale} inquiry</b> berstatus Baru lebih dari 4 jam tanpa dibalas.</div>`:''}
+  <div class="kpi-row" style="margin-bottom:14px">
+    ${kpi('Inquiry masuk',counts.all,'var(--y)','periode dipilih')}
+    ${kpi('Konversi',conv+'%','var(--green)',won.length+' menang dari '+closed+' selesai')}
+    ${kpi('Nilai menang','Rp '+Math.round(wonVal/1e6)+' jt','var(--green)','order dari inquiry')}
+    ${kpi('Kalah: tidak ada stok',lostStock,'var(--red)','Rp '+Math.round(lostStockVal/1e6)+' jt hilang')}
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tab('all','Semua')}${tab('new','Baru')}${tab('replied','Dibalas')}${tab('quoted','Ditawarkan')}${tab('won','Menang')}${tab('lost','Kalah')}${tab('nostock','Tidak ada stok')}${tab('noreply','No response')}</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="text" id="inq-search" placeholder="Cari customer / part / kebutuhan…" value="${esc(DB._inqSearch||'')}" oninput="DB._inqSearch=this.value;clearTimeout(window._inqST);window._inqST=setTimeout(()=>renderView('inquiry'),300)" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none"/>
+    <span style="font-size:12px;color:var(--t3)">Periode:</span>
+    <select onchange="DB._inqPeriod=this.value;renderView('inquiry')" style="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:7px 10px;outline:none">
+      <option value="7" ${period==='7'?'selected':''}>7 hari</option><option value="30" ${period==='30'?'selected':''}>30 hari</option><option value="90" ${period==='90'?'selected':''}>90 hari</option><option value="all" ${period==='all'?'selected':''}>Semua</option>
+    </select>
+  </div>
+  <div class="card"><table class="tbl">
+    <thead><tr><th>ID</th><th>Tanggal</th><th>Customer</th><th>Kebutuhan</th><th>Channel</th><th>Status</th><th>Nilai</th><th>Oleh</th><th></th></tr></thead>
+    <tbody>${rows.length?rows.map(i=>{const st=INQ_STATUS[i.status]||['?','var(--t3)'];return `<tr style="cursor:pointer" onclick="openInquiry('${i.id}')">
+      <td><span class="mono">${esc(i.id)}</span></td>
+      <td><span class="muted">${fmtDateOnly(i.date)}</span></td>
+      <td><div class="bold">${esc(i.customer)}</div><div class="muted">${esc(i.phone||'')}</div></td>
+      <td><div style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.need)}</div>${i.sku?`<div class="muted mono" style="font-size:11px">${esc(i.sku)}${i.qty?' × '+i.qty:''}</div>`:''}</td>
+      <td><span class="muted">${esc(i.channel)}</span></td>
+      <td><span style="background:${st[1]}22;color:${st[1]};border:1px solid ${st[1]}55;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st[0]}</span></td>
+      <td>${i.value?'Rp '+Math.round(i.value).toLocaleString('id-ID'):'<span class="muted">—</span>'}</td>
+      <td><span class="muted">${esc(i.by||'—')}</span></td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();openInquiry('${i.id}')">Edit</button></td>
+    </tr>`;}).join(''):`<tr><td colspan="9" class="empty-row">Belum ada inquiry${q||f!=='all'?' yang cocok':''}. Klik <b>+ Catat Inquiry</b>.</td></tr>`}</tbody>
+  </table></div>`;
+}
+
+// ─── STALE TICKETS (tanpa update > N hari) ───
+const STALE_DAYS=14;
+function staleDays(t){ return Math.floor((Date.now()-(t.updatedAt||t.createdAt||Date.now()))/86400000); }
+function isActiveTicket(t){ return !['done','delivered','drop'].includes(t.status); }
+function staleTickets(){ return DB.tickets.filter(t=>isActiveTicket(t)&&staleDays(t)>=STALE_DAYS).sort((a,b)=>staleDays(b)-staleDays(a)); }
 
 // ─── AUTO-REFRESH (multi-computer) ───
 async function autoRefresh(){
