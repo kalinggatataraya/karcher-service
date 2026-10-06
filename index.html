@@ -644,6 +644,7 @@ textarea { resize: vertical; min-height: 80px; }
 
     <div class="sb-section">Workshop</div>
     <button class="nav-item on" onclick="goView('dashboard',this)"><span class="ico">📊</span> Dashboard</button>
+    <button class="nav-item" onclick="goView('kpi',this)"><span class="ico">🎯</span> KPI Service Center</button>
     <button class="nav-item" onclick="goView('tickets',this)"><span class="ico">🎫</span> Service Tickets</button>
     <button class="nav-item" onclick="goView('new-ticket',this)"><span class="ico">➕</span> New Ticket</button>
 
@@ -1189,6 +1190,7 @@ const CLOUD_API = 'https://api.jsonbin.io/v3/b';
 const EMAIL_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/send-reminder';
 const EMAIL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoZHJ2cGNlZ3BjaWJ4eHZ1YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NTg0MTcsImV4cCI6MjA5NTUzNDQxN30.NMOMXkwFqHLqkVayvz3CnvocHlo0e1YPmsc9EZl-66w';
 const PM_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-pm-eligible';
+const KPI_FN_URL = 'https://uhdrvpcegpcibxxvubyb.supabase.co/functions/v1/karcher-sc-kpi';
 // ── Primary cloud store: Supabase Postgres (jsonb). JSONBin kept as read-only fallback for one-time migration. ──
 const SUPA_STATE = 'https://uhdrvpcegpcibxxvubyb.supabase.co/rest/v1/ksc_state';
 const STATE_ID = 'main';
@@ -1538,7 +1540,7 @@ async function trackTicket() {
 // ═══════════════════════════════════════════════
 function renderView(view) {
   window.currentView = view;
-  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', inquiry:'Inquiry Log', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', tickets:'Service Tickets', 'new-ticket':'New Ticket', 'site-visits':'Site Visits', 'new-visit':'Schedule Visit', 'tech-schedule':'Jadwal Teknisi', productivity:'Productivity', technicians:'Technicians', trials:'Trial Unit', pm:'Preventive Maintenance', inquiry:'Inquiry Log', kpi:'KPI Service Center', settings:'Settings' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const c = document.getElementById('main-content');
 
@@ -1562,6 +1564,7 @@ function renderView(view) {
   else if (view==='trials') c.innerHTML = viewTrials();
   else if (view==='pm') c.innerHTML = viewPM();
   else if (view==='inquiry') c.innerHTML = viewInquiry();
+  else if (view==='kpi') c.innerHTML = viewKPI();
   else if (view==='tech-schedule') c.innerHTML = viewTechSchedule();
   else if (view==='settings') c.innerHTML = viewSettings();
 
@@ -2161,6 +2164,7 @@ function viewSettings() {
 
   return `
   <div style="max-width:600px">
+    ${kpiSettingsCard()}
     <div class="card" style="margin-bottom:16px">
       <div class="card-hd"><h3>🔐 Ganti Password Anda</h3></div>
       <div class="card-body" style="padding:16px">
@@ -3413,6 +3417,181 @@ const STALE_DAYS=14;
 function staleDays(t){ return Math.floor((Date.now()-(t.updatedAt||t.createdAt||Date.now()))/86400000); }
 function isActiveTicket(t){ return !['done','delivered','drop'].includes(t.status); }
 function staleTickets(){ return DB.tickets.filter(t=>isActiveTicket(t)&&staleDays(t)>=STALE_DAYS).sort((a,b)=>staleDays(b)-staleDays(a)); }
+
+// ═══════════════════════════════════════════════
+// KPI SERVICE CENTER (Lapisan 2)
+// Odoo (via edge function karcher-sc-kpi): omset sparepart, attach rate, stok fast-moving
+// App (data tim): konversi PM, inquiry, fill rate, pengecualian
+// ═══════════════════════════════════════════════
+const KPI_TOKEN_KEY='ksc_kpi_token', KPI_CACHE_KEY='ksc_kpi_cache', KPI_STALE_MS=10*60*1000;
+function kpiSettings(){ const s=getSettings(); if(!s.kpi||typeof s.kpi!=='object') s.kpi={}; const k=s.kpi;
+  return { annual:Number(k.annual)||0, pmConv:Number(k.pmConv)||65, attach:Number(k.attach)||50, fill:Number(k.fill)||85, inqConv:Number(k.inqConv)||0 }; }
+function kpiToken(){ try{ return localStorage.getItem(KPI_TOKEN_KEY)||''; }catch(e){ return ''; } }
+function kpiState(){ if(!window._kpi){ let cached=null; try{ cached=JSON.parse(localStorage.getItem(KPI_CACHE_KEY)||'null'); }catch(e){}
+  window._kpi={ data:cached&&cached.data||null, ts:cached&&cached.ts||0, loading:false, error:'' }; } return window._kpi; }
+async function loadKPI(fresh){
+  const st=kpiState(); if(st.loading) return; st.loading=true; st.error='';
+  if(window.currentView==='kpi') renderView('kpi');
+  try{
+    const headers={'Content-Type':'application/json','apikey':EMAIL_ANON_KEY,'Authorization':'Bearer '+EMAIL_ANON_KEY};
+    const tok=kpiToken(); if(tok) headers['x-sc-token']=tok;
+    const res=await fetch(KPI_FN_URL,{method:'POST',headers,body:JSON.stringify({fresh:!!fresh})});
+    let data=null; try{ data=await res.json(); }catch(e){ throw new Error('Edge function karcher-sc-kpi belum di-deploy (HTTP '+res.status+')'); }
+    if(!data.ok) throw new Error(data.error||('HTTP '+res.status));
+    st.data=data; st.ts=Date.now();
+    try{ localStorage.setItem(KPI_CACHE_KEY,JSON.stringify({data,ts:st.ts})); }catch(e){}
+  }catch(e){ st.error=e.message||String(e); }
+  st.loading=false;
+  if(window.currentView==='kpi') renderView('kpi');
+}
+function rpShort(v){ v=Math.round(Number(v)||0); const a=Math.abs(v), sg=v<0?'−':'';
+  if(a>=1e9) return sg+'Rp '+(a/1e9).toLocaleString('id-ID',{maximumFractionDigits:2})+' M';
+  if(a>=1e6) return sg+'Rp '+(a/1e6).toLocaleString('id-ID',{maximumFractionDigits:1})+' jt';
+  if(a>=1e3) return sg+'Rp '+Math.round(a/1e3).toLocaleString('id-ID')+' rb';
+  return sg+'Rp '+a; }
+function pctTxt(x){ return x==null||isNaN(x)?'—':Math.round(x*100)+'%'; }
+function kpiTone(actual,target){ if(actual==null||!target) return 'var(--t1)'; const r=actual/target; return r>=1?'var(--green)':r>=0.75?'#f59e0b':'var(--red)'; }
+
+// Data operasional dari app (30 hari terakhir)
+function kpiOps(days){
+  const cut=Date.now()-days*86400000;
+  const inWin=d=>{ const t=new Date(String(d)+'T00:00:00').getTime(); return t>=cut; };
+  // PM: hanya kunjungan dengan hasil tercatat (format Lapisan 1)
+  const pv=(DB.pm&&DB.pm.visits)||{}; const ents=(DB.pm&&DB.pm.entitlements)||[];
+  const pms=[]; Object.keys(pv).forEach(inv=>(pv[inv]||[]).forEach(v=>{ if(inWin(v.date)) pms.push({inv,v}); }));
+  const pmTracked=pms.filter(x=>x.v.quote||x.v.order);
+  const pmOrder=pmTracked.filter(x=>x.v.order&&['won','onsite','po'].includes(x.v.order.status));
+  const pmQuote=pmTracked.filter(x=>x.v.quote&&x.v.quote.issued);
+  const pmOrderVal=pmOrder.reduce((a,x)=>a+(x.v.order.value||0),0);
+  // Inquiry
+  const inq=(DB.inquiries||[]).filter(i=>inWin(i.date));
+  const won=inq.filter(i=>i.status==='won'); const closed=inq.filter(i=>['won','lost','nostock','noreply'].includes(i.status));
+  const nostock=inq.filter(i=>i.status==='nostock');
+  // Pengecualian
+  const followUp=[]; Object.keys(pv).forEach(inv=>(pv[inv]||[]).forEach(v=>{
+    if(!(v.quote&&v.quote.issued)) return; const st=(v.order&&v.order.status)||'none';
+    if(!['none','po'].includes(st)) return;
+    const age=Math.floor((Date.now()-new Date(v.date+'T00:00:00').getTime())/86400000);
+    if(age>=14&&age<=120){ const e=ents.find(x=>String(x.invoiceId)===String(inv)); followUp.push({inv,partner:e?e.partner:inv,date:v.date,age,value:v.quote.value||0,by:v.by,status:st}); }
+  }));
+  followUp.sort((a,b)=>b.value-a.value);
+  const pmOverdue=ents.map(e=>({e,c:pmCompute(e)})).filter(x=>x.c.status==='overdue').sort((a,b)=>(a.c.nextDue||0)-(b.c.nextDue||0));
+  const inqNew=(DB.inquiries||[]).filter(i=>i.status==='new'&&Date.now()-(i.createdAt||0)>4*3600000);
+  return {
+    pmCount:pms.length, pmTracked:pmTracked.length, pmOrder:pmOrder.length, pmQuote:pmQuote.length, pmOrderVal,
+    pmConv:pmTracked.length?pmOrder.length/pmTracked.length:null,
+    inqTotal:inq.length, inqWon:won.length, inqClosed:closed.length, inqWonVal:won.reduce((a,i)=>a+(i.value||0),0),
+    inqConv:closed.length?won.length/closed.length:null,
+    nostock:nostock.length, nostockVal:nostock.reduce((a,i)=>a+(i.value||0),0),
+    fill:inq.length?1-nostock.length/inq.length:null,
+    followUp, pmOverdue, inqNew, stale:staleTickets()
+  };
+}
+
+function viewKPI(){
+  const st=kpiState(); const T=kpiSettings(); const ops=kpiOps(30); const d=st.data;
+  const needLoad=!st.loading&&!st.error&&(!d||Date.now()-st.ts>KPI_STALE_MS);
+  if(needLoad) setTimeout(()=>loadKPI(false),0);
+
+  const wkTarget=T.annual?T.annual/48:0, moTarget=T.annual?T.annual/12:0;
+  let ytdTarget=0;
+  if(T.annual&&d){ const t=new Date(d.today+'T00:00:00'); const y0=new Date(t.getFullYear(),0,1); const days=(t-y0)/86400000+1; const yd=(new Date(t.getFullYear(),11,31)-y0)/86400000+1; ytdTarget=T.annual*days/yd; }
+  const bar=(v,t,col)=>{ if(!t) return ''; const p=Math.max(0,Math.min(100,v/t*100)); return `<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:8px"><div style="height:100%;width:${p}%;background:${col}"></div></div>`; };
+
+  const header=`
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--t2)">Omset = invoice posted kategori <b>KARCHER SPAREPART</b> di Odoo · data tim = 30 hari terakhir dari app${d?` · Odoo per ${new Date(st.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${d.cached?' (cache)':''}`:''}</div>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="loadKPI(true)" ${st.loading?'disabled':''}>${st.loading?'⏳ Memuat dari Odoo…':'🔄 Refresh dari Odoo'}</button>
+  </div>
+  ${!T.annual?`<div style="background:var(--yd);border:1px solid var(--yd2);border-radius:var(--r);padding:9px 13px;margin-bottom:12px;font-size:13px">🎯 Target omset tahunan belum ditetapkan. Isi di <b style="cursor:pointer;text-decoration:underline" onclick="goView('settings',document.querySelector('[onclick*=\\'settings\\']'))">Settings → KPI Service Center</b> supaya progress mingguan & bulanan muncul.</div>`:''}
+  ${st.error?`<div style="background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:12px;font-size:13px;color:var(--red)">⚠️ Data Odoo gagal dimuat: ${esc(st.error)}${d?' — menampilkan data terakhir.':''}</div>`:''}`;
+
+  const card=(label,val,col,sub,extra)=>`<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-val" style="color:${col};font-size:26px">${val}</div><div class="kpi-sub">${sub}</div>${extra||''}</div>`;
+  const R=d?d.revenue:null;
+  const revCards=`
+  <div class="kpi-row" style="margin-bottom:12px">
+    ${card('Omset minggu ini',R?rpShort(R.thisWeek):'…',kpiTone(R&&R.thisWeek,wkTarget),R?(wkTarget?`${pctTxt(R.thisWeek/wkTarget)} dari target ${rpShort(wkTarget)}`:'sejak Senin '+fmtDateOnly(R.weekStart)):'memuat…',R?bar(R.thisWeek,wkTarget,kpiTone(R.thisWeek,wkTarget)):'')}
+    ${card('Minggu lalu',R?rpShort(R.lastWeek):'…',kpiTone(R&&R.lastWeek,wkTarget),R?(wkTarget?`${pctTxt(R.lastWeek/wkTarget)} dari target`:'Senin–Minggu lalu'):'')}
+    ${card('Bulan ini (MTD)',R?rpShort(R.mtd):'…',kpiTone(R&&R.mtd,moTarget),R?(moTarget?`${pctTxt(R.mtd/moTarget)} dari target ${rpShort(moTarget)}`:'sejak tgl 1'):'',R?bar(R.mtd,moTarget,kpiTone(R.mtd,moTarget)):'')}
+    ${card('Tahun ini (YTD)',R?rpShort(R.ytd):'…',kpiTone(R&&R.ytd,ytdTarget),R?(ytdTarget?`${pctTxt(R.ytd/ytdTarget)} dari target pro-rata ${rpShort(ytdTarget)}`:'sejak 1 Januari'):'',R?bar(R.ytd,ytdTarget,kpiTone(R.ytd,ytdTarget)):'')}
+  </div>`;
+
+  const A=d?d.attach:null, S=d?d.stock:null;
+  const fillSub=ops.inqTotal?`${ops.nostock} dari ${ops.inqTotal} inquiry kalah karena stok${ops.nostockVal?' · '+rpShort(ops.nostockVal)+' hilang':''}`:'belum ada inquiry 30 hari';
+  const opsCards=`
+  <div class="kpi-row" style="margin-bottom:16px">
+    ${card('Konversi PM',ops.pmConv==null?'—':pctTxt(ops.pmConv),kpiTone(ops.pmConv,T.pmConv/100),ops.pmTracked?`${ops.pmOrder} order dari ${ops.pmTracked} PM · target ${T.pmConv}%`:'belum ada PM dengan hasil tercatat',ops.pmOrderVal?`<div style="font-size:11px;color:var(--t3);margin-top:4px">${ops.pmQuote} quote · nilai order ${rpShort(ops.pmOrderVal)}</div>`:'')}
+    ${card('Attach rate',A?pctTxt(A.rate):'…',kpiTone(A&&A.rate,T.attach/100),A?`${A.withParts} dari ${A.unitBuyers} pembeli unit ${String(d.today).slice(0,4)} beli parts · target ${T.attach}%`:'memuat…')}
+    ${card('Inquiry → order',ops.inqConv==null?'—':pctTxt(ops.inqConv),T.inqConv?kpiTone(ops.inqConv,T.inqConv/100):'var(--t1)',ops.inqTotal?`${ops.inqWon} menang dari ${ops.inqClosed} selesai · ${ops.inqTotal} masuk · ${rpShort(ops.inqWonVal)}`:'belum ada inquiry 30 hari')}
+    ${card('Fill rate',ops.fill==null?'—':pctTxt(ops.fill),kpiTone(ops.fill,T.fill/100),fillSub,S?`<div style="font-size:11px;color:var(--t3);margin-top:4px">Counter WH-SC: ${S.atCounter}/${S.fastMoving} SKU fast-moving ada · ${S.stockoutTotal} kosong total</div>`:'')}
+  </div>`;
+
+  // Tren 12 bulan
+  let trend='';
+  if(R){ const max=Math.max(1,moTarget,...R.last12.map(m=>m.revenue));
+    const mn=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    trend=`<div class="card" style="margin-bottom:16px"><div class="card-hd"><h3>Omset sparepart 12 bulan</h3><div class="sep"></div>${moTarget?`<span style="font-size:11px;color:var(--t3)">garis = target bulanan ${rpShort(moTarget)}</span>`:''}</div>
+    <div style="position:relative;display:flex;align-items:flex-end;gap:6px;height:170px;padding:14px 14px 0">
+      ${moTarget?`<div style="position:absolute;left:14px;right:14px;bottom:${moTarget/max*150+22}px;border-top:1.5px dashed var(--y);opacity:.7"></div>`:''}
+      ${R.last12.map((m,i)=>{ const h=Math.max(2,m.revenue/max*150); const cur=i===11; const col=moTarget?(m.revenue>=moTarget?'var(--green)':'var(--blue)'):'var(--blue)';
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="${m.month}: ${rpShort(m.revenue)}">
+          <div style="font-size:9px;color:var(--t3);margin-bottom:3px;white-space:nowrap">${m.revenue?rpShort(m.revenue).replace('Rp ',''):''}</div>
+          <div style="width:100%;height:${h}px;background:${col};opacity:${cur?.55:.9};border-radius:3px 3px 0 0"></div>
+          <div style="font-size:10px;color:${cur?'var(--y)':'var(--t3)'};margin:4px 0 6px">${mn[Number(m.month.slice(5))-1]}</div></div>`; }).join('')}
+    </div></div>`; }
+
+  // Pengecualian
+  const sec=(title,col,count,body)=>`<div class="card" style="margin-bottom:12px"><div class="card-hd"><h3 style="color:${col}">${title}</h3><div class="sep"></div><span class="badge" style="background:${col}22;color:${col}">${count}</span></div><div style="padding:4px 14px 10px">${body}</div></div>`;
+  const row=(a,b,c,onclick)=>`<div ${onclick?`onclick="${onclick}" style="cursor:pointer;`:'style="'}display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--b1);font-size:12px"><div style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a}</div><div style="color:var(--t3);white-space:nowrap">${b}</div><div style="font-weight:700;white-space:nowrap;min-width:80px;text-align:right">${c}</div></div>`;
+  const empty=t=>`<div style="font-size:12px;color:var(--t3);padding:8px 0">${t}</div>`;
+  const ex=[];
+  ex.push(sec('💰 Quotation PM belum jadi order (≥14 hari)','#f59e0b',ops.followUp.length,
+    ops.followUp.length?ops.followUp.slice(0,8).map(f=>row(`<b>${esc(f.partner)}</b> <span class="muted">· PM ${fmtDateOnly(f.date)} · ${esc(f.by||'')}</span>`,f.status==='po'?'tunggu PO':'belum ada order',`${rpShort(f.value)} · ${f.age}h`,`goView('pm',document.querySelector('[onclick*=\\'pm\\']'))`)).join(''):empty('Tidak ada — semua quotation PM sudah ditindaklanjuti.')));
+  ex.push(sec('🏭 Pembeli unit tahun ini yang belum beli parts','var(--blue)',A?A.unitBuyers-A.withParts:'…',
+    A?(A.topWithoutParts.length?A.topWithoutParts.slice(0,10).map(u=>row(`<b>${esc(u.partner)}</b>`,`${Math.round(u.unitQty)} unit · terakhir ${fmtDateOnly(u.lastUnitDate)}`,rpShort(u.unitRevenue))).join(''):empty('Semua pembeli unit sudah beli parts.')):empty('Memuat dari Odoo…')));
+  ex.push(sec('📦 SKU fast-moving tidak ada di counter WH-SC','var(--red)',S?S.stockoutTotal+S.notAtCounter:'…',
+    S?(S.problems.length?S.problems.slice(0,12).map(p=>row(`<span class="mono" style="color:var(--t3)">${esc(p.code)}</span> ${esc(p.name)}`,`${p.freq}× terjual / 180 hari`,p.qtyTotal<=0?'<span style="color:var(--red)">KOSONG TOTAL</span>':`<span style="color:#f59e0b">${p.qtyTotal} di gudang lain</span>`)).join(''):empty('Semua SKU fast-moving ada di counter.')):empty('Memuat dari Odoo…')));
+  ex.push(sec('🛡️ PM terlambat','var(--red)',ops.pmOverdue.length,
+    ops.pmOverdue.length?ops.pmOverdue.slice(0,8).map(x=>row(`<b>${esc(x.e.partner)}</b> <span class="muted">· ${esc(x.e.invoice)}</span>`,`PM ${x.c.done+1}/3`,`<span style="color:var(--red)">${esc(x.c.badge)}</span>`,`goView('pm',document.querySelector('[onclick*=\\'pm\\']'))`)).join(''):empty('Tidak ada PM terlambat.')));
+  ex.push(sec('⏱️ Ticket tanpa update ≥ '+STALE_DAYS+' hari','var(--red)',ops.stale.length,
+    ops.stale.length?ops.stale.slice(0,8).map(t=>row(`<span class="mono" style="color:var(--t3)">${esc(t.id)}</span> <b>${esc(t.customer)}</b>`,statusLabel(t.status),`<span style="color:var(--red)">${staleDays(t)} hari</span>`,`openStatusModal('${t.id}')`)).join(''):empty('Tidak ada ticket yang macet.')));
+  if(ops.inqNew.length) ex.push(sec('📞 Inquiry belum dibalas > 4 jam','var(--red)',ops.inqNew.length,
+    ops.inqNew.slice(0,8).map(i=>row(`<b>${esc(i.customer)}</b> <span class="muted">· ${esc(i.need)}</span>`,esc(i.channel),relTime(i.createdAt),`openInquiry('${i.id}')`)).join('')));
+
+  return `${header}${revCards}${opsCards}${trend}
+  <div style="font-size:13px;font-weight:700;color:var(--t1);margin:6px 0 10px">Perlu tindakan</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px">${ex.join('')}</div>`;
+}
+
+function kpiSettingsCard(){
+  const T=kpiSettings(); const tok=kpiToken();
+  const inp=(id,val,ph,type)=>`<input type="${type||'number'}" id="${id}" value="${val||''}" placeholder="${ph}" style="width:100%;background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none"/>`;
+  const lbl=t=>`<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">${t}</div>`;
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><h3>🎯 KPI Service Center</h3></div>
+    <div class="card-body" style="padding:16px">
+      <div style="margin-bottom:12px">${lbl('Target omset sparepart per tahun (Rp)')}${inp('set-kpi-annual',T.annual,'mis. 3000000000')}
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Target bulanan = ÷12, target mingguan = ÷48 minggu kerja.</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>${lbl('Target konversi PM (%)')}${inp('set-kpi-pm',T.pmConv,'65')}</div>
+        <div>${lbl('Target attach rate (%)')}${inp('set-kpi-attach',T.attach,'50')}</div>
+        <div>${lbl('Target fill rate (%)')}${inp('set-kpi-fill',T.fill,'85')}</div>
+        <div>${lbl('Target inquiry → order (%)')}${inp('set-kpi-inq',T.inqConv||'','kosongkan dulu')}</div>
+      </div>
+      <div style="margin-bottom:16px">${lbl('Token KPI (khusus perangkat ini)')}${inp('set-kpi-token',tok,'sama dengan secret SC_KPI_TOKEN di Supabase','password')}
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Disimpan hanya di browser ini, tidak ikut tersinkron. Isi sekali di setiap laptop/HP yang membuka KPI.</div></div>
+      <button class="btn btn-y btn-sm" onclick="saveKPISettings()">💾 Simpan</button>
+    </div></div>`;
+}
+function saveKPISettings(){
+  const s=getSettings(); if(!s.kpi) s.kpi={};
+  const num=id=>Number((document.getElementById(id)||{}).value)||0;
+  s.kpi.annual=num('set-kpi-annual'); s.kpi.pmConv=num('set-kpi-pm')||65; s.kpi.attach=num('set-kpi-attach')||50; s.kpi.fill=num('set-kpi-fill')||85; s.kpi.inqConv=num('set-kpi-inq');
+  const tok=((document.getElementById('set-kpi-token')||{}).value||'').trim();
+  try{ if(tok) localStorage.setItem(KPI_TOKEN_KEY,tok); else localStorage.removeItem(KPI_TOKEN_KEY); }catch(e){}
+  saveData(DB); renderView('settings'); toast('Pengaturan KPI disimpan','ok');
+  if(window._kpi){ window._kpi.error=''; window._kpi.ts=0; }
+}
 
 // ─── AUTO-REFRESH (multi-computer) ───
 async function autoRefresh(){
