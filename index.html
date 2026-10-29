@@ -751,6 +751,10 @@ textarea { resize: vertical; min-height: 80px; }
       <div id="f-suggest" style="background:var(--b1);border:1px solid var(--b2);border-radius:var(--r);padding:11px 13px;margin-bottom:12px"></div>
       <div class="f-row"><div class="f-label">Internal Notes</div><textarea id="f-notes" placeholder="Notes for technician (not visible to customer)…" style="min-height:60px"></textarea></div>
       <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(visible to customer)</span></div><input type="date" id="f-eta"/></div>
+      <div class="f-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="f-row"><div class="f-label">No. PO ke Kärcher <span style="color:var(--t3);font-weight:400">(internal)</span></div><input type="text" id="f-po" placeholder="Bila part sudah dipesan"/></div>
+        <div class="f-row"><div class="f-label">ETA Part Datang</div><input type="date" id="f-po-eta"/></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-ticket')">Cancel</button>
@@ -769,7 +773,7 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="modal-body">
       <div class="f-row"><div class="f-label">Ticket</div><div id="status-ticket-id" style="font-family:var(--mono);color:var(--y);font-size:13px"></div></div>
       <div class="f-row"><div class="f-label">New Status</div>
-        <select id="f-status">
+        <select id="f-status" onchange="statusFieldsToggle()">
           <option value="received">Received</option>
           <option value="diagnosing">Diagnosing</option>
           <option value="price-offering">Price Offering — Awaiting Customer Approval</option>
@@ -781,8 +785,26 @@ textarea { resize: vertical; min-height: 80px; }
           <option value="drop">Drop — Service Cancelled</option>
         </select>
       </div>
+      <div id="status-sla-hint" style="display:none;border-radius:var(--r);padding:9px 12px;margin-bottom:12px;font-size:12px;line-height:1.5"></div>
+      <div class="f-row" id="row-drop-reason" style="display:none"><div class="f-label">Alasan Drop <span style="color:var(--red)">*</span></div>
+        <select id="f-status-drop-reason">
+          <option value="">— Pilih alasan —</option>
+          <option>Customer batal / tidak jadi</option>
+          <option>Harga terlalu mahal</option>
+          <option>Beli unit baru / ganti unit</option>
+          <option>Service di tempat lain</option>
+          <option>Tidak bisa diperbaiki / part discontinue</option>
+          <option>Tidak ada respons setelah 3x follow-up</option>
+          <option>Lainnya (tulis di catatan)</option>
+        </select>
+      </div>
+      <div id="row-po" style="display:none">
+        <div class="f-row"><div class="f-label">No. PO ke Kärcher <span style="color:var(--t3);font-weight:400">(wajib bila Indent Part ≥ 21 hari)</span></div><input type="text" id="f-status-po" placeholder="Contoh: PO/KT/2026/0123"/></div>
+        <div class="f-row"><div class="f-label">ETA Part Datang</div><input type="date" id="f-status-po-eta"/></div>
+      </div>
       <div class="f-row"><div class="f-label">Estimated Completion Date <span style="color:var(--t3);font-weight:400">(optional update)</span></div><input type="date" id="f-status-eta"/></div>
       <div class="f-row"><div class="f-label">Update Note</div><textarea id="f-status-note" placeholder="What was done / findings…" style="min-height:80px"></textarea></div>
+      <div class="f-row" id="row-sla-extend" style="display:none"><label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;cursor:pointer"><input type="checkbox" id="f-status-extend" style="margin-top:3px"/><span>Perpanjang SLA 14 hari (hanya bila customer <b>sudah konfirmasi</b> masih mempertimbangkan — tulis alasannya di catatan)</span></label></div>
       <div class="f-row"><div class="f-label">Assign Technician</div><select id="f-status-tech"><option value="">— Keep current —</option></select></div>
     </div>
     <div class="modal-footer">
@@ -1372,7 +1394,7 @@ function _mergeArr(base,cur,fresh,key){
       } else out.set(k,v);
     } else if(JSON.stringify(b)!==JSON.stringify(v)){
       out.set(k,v);                                                    // edited on this computer
-    } else if(!out.has(k)) out.set(k,v);
+    } // unchanged here & missing in cloud = deleted elsewhere → stay deleted
   }
   return [...out.values()];
 }
@@ -1409,10 +1431,10 @@ function mergeDB(base,cur,fresh){
   });
   return out;
 }
-function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.inquiries=Array.isArray(d.inquiries)?d.inquiries:[]; d.onboarding=(d.onboarding&&typeof d.onboarding==='object')?d.onboarding:{}; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
+function normalizeDB(d){ d=(d&&typeof d==='object')?d:{}; d.tickets=Array.isArray(d.tickets)?d.tickets:[]; d.tickets.forEach(t=>{ if(!Array.isArray(t.history)) t.history=[]; }); d.visits=Array.isArray(d.visits)?d.visits:[]; d.technicians=Array.isArray(d.technicians)?d.technicians:[]; d.trials=Array.isArray(d.trials)?d.trials:[]; d.inquiries=Array.isArray(d.inquiries)?d.inquiries:[]; d.onboarding=(d.onboarding&&typeof d.onboarding==='object')?d.onboarding:{}; d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{}; d.pm=(d.pm&&typeof d.pm==='object')?d.pm:{}; if(!Array.isArray(d.pm.entitlements)) d.pm.entitlements=[]; d.pm.entitlements=d.pm.entitlements.map(e=>({invoiceId:e.invoiceId,invoice:e.invoice,partner:e.partner,date:e.date,amount:e.amount,machine:e.machine||'',salesman:e.salesman||''})); if(!d.pm.visits||typeof d.pm.visits!=='object') d.pm.visits={}; if(!d.pm.cancelled||typeof d.pm.cancelled!=='object') d.pm.cancelled={}; if(!d.pm.meta||typeof d.pm.meta!=='object') d.pm.meta={}; return d; }
 let DB = normalizeDB(loadData());
 let _baseline = _clone(DB);
-const APP_VERSION = '2026-10-06-auth';
+const APP_VERSION = '2026-10-29-sla';
 // Collision-safe sequential id: max existing number for this year + 1
 function nextSeq(prefix, arr, pad){
   const y = new Date().getFullYear();
@@ -1620,20 +1642,24 @@ function viewDashboard() {
   });
   const maxD = Math.max(...days.map(d=>d.count),1);
 
-  const stale=staleTickets();
-  const staleIndent=stale.filter(x=>x.status==='indent-part');
-  const staleBlock=stale.length?`
-  <div style="background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:12px 14px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <div style="font-size:13px;font-weight:700;color:var(--red)">⚠️ ${stale.length} ticket tanpa update ≥ ${STALE_DAYS} hari${staleIndent.length?` · ${staleIndent.length} di antaranya Indent Part`:''}</div>
+  const slaList=slaTickets();
+  const c3=slaList.filter(x=>x.s.level>=3).length, c2=slaList.filter(x=>x.s.level===2).length, c1=slaList.filter(x=>x.s.level===1).length;
+  const staleBlock=slaList.length?`
+  <div style="background:${c3?'rgba(255,90,90,.08)':c2?'rgba(255,159,64,.08)':'var(--yd)'};border:1px solid ${c3?'rgba(255,90,90,.35)':c2?'rgba(255,159,64,.35)':'var(--yd2)'};border-radius:var(--r);padding:12px 14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:700;color:var(--t1)">⏱ SLA: ${slaList.length} ticket perlu tindakan</div>
+      ${c3?`<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(255,90,90,.12);padding:2px 8px;border-radius:20px">🔴 ${c3} harus diputuskan / isi PO</span>`:''}
+      ${c2?`<span style="font-size:11px;font-weight:700;color:var(--orange);background:rgba(255,159,64,.12);padding:2px 8px;border-radius:20px">🟠 ${c2} Doni telepon / ETA lewat</span>`:''}
+      ${c1?`<span style="font-size:11px;font-weight:700;color:var(--y);background:var(--yd);padding:2px 8px;border-radius:20px">🟡 ${c1} Risma follow-up</span>`:''}
       <button class="btn btn-sm" style="margin-left:auto" onclick="ticketFilter='all';ticketSearch='';DB._staleOnly=true;goView('tickets',document.querySelectorAll('.nav-item')[1])">Lihat semua</button>
     </div>
-    ${stale.slice(0,5).map(x=>`<div onclick="openStatusModal('${x.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,90,90,.15);font-size:12px">
+    ${slaList.slice(0,6).map(({t:x,s})=>`<div onclick="openStatusModal('${x.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--b2);font-size:12px">
       <span class="mono" style="color:var(--t3)">${esc(x.id)}</span>
       <span class="bold" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.customer)} <span style="color:var(--t3);font-weight:400">· ${esc(x.machine)}</span></span>
       <span class="status-badge s-${x.status}" style="font-size:10px">${statusLabel(x.status)}</span>
-      <span style="color:var(--red);font-weight:700;white-space:nowrap">${staleDays(x)} hari</span>
+      ${slaBadge(x)}
     </div>`).join('')}
+    <div style="font-size:11px;color:var(--t3);margin-top:8px">Aturan: Price Offering 14h → Risma FU · 30h → Doni telepon · 45h → wajib putuskan (lanjut/Drop + alasan). Indent Part 21h → wajib No. PO Kärcher + ETA.</div>
   </div>`:'';
 
   return `
@@ -1710,15 +1736,16 @@ function viewTickets(filter) {
     );
   }
   if (ticketFilter !== 'all') tickets = tickets.filter(t => t.status === ticketFilter);
-  if (DB._staleOnly) tickets = tickets.filter(t => isActiveTicket(t) && staleDays(t) >= STALE_DAYS);
-  if (ticketSort==='created_asc') tickets.sort((a,b)=>a.createdAt-b.createdAt);
+  if (DB._staleOnly) { tickets = tickets.filter(t => slaOf(t).level > 0); tickets.sort((a,b)=>slaOf(b).level-slaOf(a).level||slaOf(b).days-slaOf(a).days); }
+  if (DB._staleOnly) {}
+  else if (ticketSort==='created_asc') tickets.sort((a,b)=>a.createdAt-b.createdAt);
   else if (ticketSort==='created_desc') tickets.sort((a,b)=>b.createdAt-a.createdAt);
   else tickets.sort((a,b)=>b.updatedAt-a.updatedAt);
   const sortOpts=[['updated_desc','Terbaru diperbarui'],['created_desc','Terbaru dibuat'],['created_asc','Terlama → terbaru']];
   const selStyle="background:var(--bg3);border:1.5px solid var(--b2);border-radius:var(--r);color:var(--t1);font-family:var(--font);font-size:12px;padding:6px 10px;outline:none;margin-right:8px";
   const staleBanner = DB._staleOnly ? `
   <div style="display:flex;align-items:center;gap:10px;background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.35);border-radius:var(--r);padding:9px 14px;margin-bottom:12px">
-    <span style="font-size:13px;color:var(--t1)">⚠️ Hanya ticket <b style="color:var(--red)">tanpa update ≥ ${STALE_DAYS} hari</b> — ${tickets.length} ticket</span>
+    <span style="font-size:13px;color:var(--t1)">⏱ Hanya ticket yang <b style="color:var(--red)">melewati SLA</b> — ${tickets.length} ticket (urut dari paling mendesak)</span>
     <button class="btn btn-sm" style="margin-left:auto" onclick="DB._staleOnly=false;renderView('tickets')">✕ Tampilkan semua</button>
   </div>` : '';
   const searchBanner = sq ? `
@@ -1738,7 +1765,7 @@ function viewTickets(filter) {
   </div>
   <div class="card">
     <table class="tbl">
-      <thead><tr><th>Ticket ID</th><th>Customer</th><th>Machine</th><th>Priority</th><th>Technician</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Ticket ID</th><th>Customer</th><th>Machine</th><th>Priority</th><th>Technician</th><th>Status</th><th>SLA / Updated</th><th>Actions</th></tr></thead>
       <tbody>${tickets.length ? tickets.map(t=>`<tr>
         <td><span class="mono">${esc(t.id)}</span></td>
         <td><div class="bold">${esc(t.customer)}</div><div class="muted">${esc(t.phone)}</div></td>
@@ -1746,7 +1773,7 @@ function viewTickets(filter) {
         <td>${prioBadge(t.priority)}</td>
         <td>${t.tech?`<span class="tech-chip"><span class="dot" style="background:${techColor(t.tech)}"></span>${esc(t.tech)}</span>`:'<span class="muted">Unassigned</span>'}</td>
         <td><span class="status-badge s-${t.status}">${statusLabel(t.status)}</span></td>
-        <td>${isActiveTicket(t)&&staleDays(t)>=STALE_DAYS?`<span style="color:var(--red);font-weight:700" title="Tanpa update ${staleDays(t)} hari">⚠ ${staleDays(t)}d</span>`:`<span class="muted">${relTime(t.updatedAt)}</span>`}</td>
+        <td>${slaBadge(t)||`<span class="muted">${relTime(t.updatedAt)}</span>`}</td>
         <td>
           <div class="btn-row">
             <button class="btn btn-sm" onclick="openStatusModal('${t.id}')">Update</button>
@@ -1986,7 +2013,7 @@ function openNewTicket() {
   editingTicketId = null;
   document.getElementById('modal-ticket-title').textContent = 'New Service Ticket';
   document.getElementById('save-ticket-btn').textContent = 'Create Ticket';
-  ['f-customer','f-phone','f-machine','f-serial','f-notes','f-eta'].forEach(id => document.getElementById(id).value='');
+  ['f-customer','f-phone','f-machine','f-serial','f-notes','f-eta','f-po','f-po-eta'].forEach(id => document.getElementById(id).value='');
   document.getElementById('f-mactype').value='Pressure Washer';
   document.getElementById('f-priority').value='normal';
   document.getElementById('f-problem').value='';
@@ -2012,6 +2039,8 @@ function openEditTicket(id) {
   document.getElementById('f-priority').value = t.priority;
   document.getElementById('f-notes').value = t.notes;
   document.getElementById('f-eta').value = t.etaDate || '';
+  document.getElementById('f-po').value = t.poNumber || '';
+  document.getElementById('f-po-eta').value = t.poEta || '';
   document.getElementById('f-sched-date').value = t.schedDate || '';
   document.getElementById('f-sched-time').value = t.schedTime || '08:00';
   populateTechSelect('f-tech', t.tech);
@@ -2026,6 +2055,8 @@ function saveTicket() {
   if (!customer || !machine || !problem) { toast('Fill required fields', 'err'); return; }
 
   const etaDate = document.getElementById('f-eta').value;
+  const poNumber = ((document.getElementById('f-po')||{}).value || '').trim();
+  const poEta = (document.getElementById('f-po-eta')||{}).value || '';
   const schedDate = (document.getElementById('f-sched-date')||{}).value || '';
   const schedTime = (document.getElementById('f-sched-time')||{}).value || '';
 
@@ -2042,7 +2073,11 @@ function saveTicket() {
   if (editingTicketId) {
     const t = DB.tickets.find(x=>x.id===editingTicketId);
     const oldEta = t.etaDate;
-    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, schedDate, schedTime, updatedAt:Date.now() });
+    const oldPo = t.poNumber || '';
+    Object.assign(t, { customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, notes:document.getElementById('f-notes').value.trim(), etaDate, poNumber, poEta, schedDate, schedTime, updatedAt:Date.now() });
+    if (poNumber && poNumber !== oldPo) {
+      t.history.push({ ts:Date.now(), action:'PO Kärcher', note:'No. PO ' + poNumber + (poEta?' • ETA part: '+fmtDateOnly(poEta):''), tech:'Admin' });
+    }
     // Log ETA change in history kalau berubah
     if (etaDate && etaDate !== oldEta) {
       t.history.push({ ts:Date.now(), action:'ETA Updated', note:'Estimated completion date set to ' + fmtDateOnly(etaDate), tech:'Admin' });
@@ -2050,7 +2085,7 @@ function saveTicket() {
     toast('Ticket updated', 'ok');
   } else {
     const id = newTicketId();
-    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, schedDate, schedTime, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
+    DB.tickets.push({ id, customer, phone:document.getElementById('f-phone').value.trim(), machine, serial:document.getElementById('f-serial').value.trim(), mactype:document.getElementById('f-mactype').value, problem, tech:document.getElementById('f-tech').value, priority:document.getElementById('f-priority').value, status:'received', notes:document.getElementById('f-notes').value.trim(), etaDate, poNumber, poEta, schedDate, schedTime, createdAt:Date.now(), updatedAt:Date.now(), history:[{ts:Date.now(),action:'Ticket Created',note:'Machine received at service center' + (etaDate?'. ETA: '+fmtDateOnly(etaDate):''),tech:'Admin'}] });
     toast('Ticket created: ' + id, 'ok');
   }
   saveData(DB);
@@ -2072,9 +2107,40 @@ function openStatusModal(id) {
   document.getElementById('f-status').value = t.status;
   document.getElementById('f-status-eta').value = t.etaDate || '';
   document.getElementById('f-status-note').value = '';
+  document.getElementById('f-status-drop-reason').value = '';
+  document.getElementById('f-status-po').value = t.poNumber || '';
+  document.getElementById('f-status-po-eta').value = t.poEta || '';
+  document.getElementById('f-status-extend').checked = false;
   populateTechSelect('f-status-tech', t.tech, true);
   document.getElementById('modal-status').dataset.ticketId = id;
+  statusFieldsToggle();
   openModal('modal-status');
+}
+
+// Tampilkan field sesuai status yang dipilih + hint SLA
+function statusFieldsToggle() {
+  const id = document.getElementById('modal-status').dataset.ticketId;
+  const t = DB.tickets.find(x=>x.id===id);
+  const st = document.getElementById('f-status').value;
+  document.getElementById('row-drop-reason').style.display = st==='drop' ? '' : 'none';
+  document.getElementById('row-po').style.display = st==='indent-part' ? '' : 'none';
+  const hint = document.getElementById('status-sla-hint');
+  const ext = document.getElementById('row-sla-extend');
+  ext.style.display = 'none';
+  if (!t) { hint.style.display='none'; return; }
+  const sla = slaOf(t);
+  const since = statusSince(t);
+  const days = Math.floor((Date.now()-since)/86400000);
+  const fu = t.lastFuAt ? ` · FU terakhir ${Math.floor((Date.now()-t.lastFuAt)/86400000)} hari lalu` : '';
+  let msg = `Status <b>${statusLabel(t.status)}</b> sudah <b>${days} hari</b>${fu}.`;
+  if (sla.level>0) msg += ` <b style="color:${sla.color}">${sla.label}</b>` + (sla.hint?` — ${sla.hint}`:'');
+  if (t.slaExtendedUntil && t.slaExtendedUntil>Date.now()) msg += ` <span style="color:var(--t3)">(SLA diperpanjang s/d ${fmtDateOnly(new Date(t.slaExtendedUntil).toISOString().slice(0,10))})</span>`;
+  hint.innerHTML = msg;
+  hint.style.display = '';
+  hint.style.background = sla.level>=3?'rgba(255,90,90,.1)':sla.level===2?'rgba(255,159,64,.1)':sla.level===1?'var(--yd)':'var(--b1)';
+  hint.style.border = '1px solid ' + (sla.level>=3?'rgba(255,90,90,.4)':sla.level===2?'rgba(255,159,64,.4)':sla.level===1?'var(--yd2)':'var(--b2)');
+  // Price Offering ≥45 hari dan status tidak diubah → tawarkan perpanjangan
+  if (t.status==='price-offering' && st==='price-offering' && sla.need==='decide') ext.style.display = '';
 }
 
 function saveStatus() {
@@ -2086,17 +2152,62 @@ function saveStatus() {
   const note = document.getElementById('f-status-note').value.trim();
   const newTech = document.getElementById('f-status-tech').value;
   const oldEta = t.etaDate;
+  const oldStatus = t.status;
+  const sla = slaOf(t);
+
+  // ── Aturan SLA ──
+  // Drop wajib alasan
+  let dropReason = '';
+  if (newStatus === 'drop') {
+    dropReason = document.getElementById('f-status-drop-reason').value;
+    if (!dropReason) { toast('Pilih alasan Drop dulu', 'err'); return; }
+    if (/Lainnya/.test(dropReason) && !note) { toast('Tulis alasan Drop di catatan', 'err'); return; }
+  }
+  // Indent Part ≥21 hari wajib No. PO Kärcher + ETA part
+  let poNumber = t.poNumber || '', poEta = t.poEta || '';
+  if (newStatus === 'indent-part') {
+    poNumber = document.getElementById('f-status-po').value.trim();
+    poEta = document.getElementById('f-status-po-eta').value;
+    const inIndent = oldStatus === 'indent-part';
+    const ageDays = inIndent ? Math.floor((Date.now()-statusSince(t))/86400000) : 0;
+    if (inIndent && ageDays >= SLA.INDENT_PO && (!poNumber || !poEta)) {
+      toast(`Indent Part sudah ${ageDays} hari — wajib isi No. PO Kärcher dan ETA part`, 'err'); return;
+    }
+    if (poNumber && !poEta) { toast('Isi ETA part datang', 'err'); return; }
+  }
+  // Price Offering ≥45 hari tidak boleh dibiarkan
+  if (oldStatus === 'price-offering' && newStatus === 'price-offering' && sla.need === 'decide') {
+    const extend = document.getElementById('f-status-extend').checked;
+    if (!extend) { toast(`Price Offering sudah ${sla.days} hari — harus diputuskan: lanjut (ubah status) atau Drop dengan alasan`, 'err'); return; }
+    if (note.length < 10) { toast('Tulis alasan perpanjangan di catatan (min. 10 karakter)', 'err'); return; }
+    t.slaExtendedUntil = Date.now() + 14*86400000;
+    t.history.push({ ts:Date.now(), action:'SLA Diperpanjang', note:'Perpanjang 14 hari: ' + note, tech: t.tech||'Admin' });
+  }
+
   t.status = newStatus;
   t.updatedAt = Date.now();
   if (newTech) t.tech = newTech;
   if (newEta !== oldEta) t.etaDate = newEta;
+  if (newStatus === 'drop') t.dropReason = dropReason;
+  if (newStatus === 'indent-part') {
+    if (poNumber && poNumber !== (t.poNumber||'')) t.history.push({ ts:Date.now(), action:'PO Kärcher', note:'No. PO ' + poNumber + (poEta?' • ETA part: '+fmtDateOnly(poEta):''), tech: t.tech||'Admin' });
+    t.poNumber = poNumber; t.poEta = poEta;
+  }
 
   // Compose history note: include ETA change if any
   let histNote = note;
   if (newEta && newEta !== oldEta) {
     histNote = (note ? note + ' • ' : '') + 'ETA: ' + fmtDateOnly(newEta);
   }
-  t.history.push({ ts:Date.now(), action:statusLabel(newStatus), note:histNote, tech: t.tech||'Admin' });
+  if (newStatus === 'drop') histNote = 'Alasan: ' + dropReason + (histNote ? ' • ' + histNote : '');
+  if (newStatus === oldStatus) {
+    // Status tidak berubah → catat sebagai follow-up, jangan reset umur status
+    t.lastFuAt = Date.now();
+    t.history.push({ ts:Date.now(), action:'Follow-up', note:histNote, tech: t.tech||'Admin' });
+  } else {
+    t.statusSince = Date.now();
+    t.history.push({ ts:Date.now(), action:statusLabel(newStatus), note:histNote, tech: t.tech||'Admin' });
+  }
   saveData(DB);
   closeModal('modal-status');
   renderView('tickets');
@@ -2226,7 +2337,7 @@ async function changePassword() {
 }
 
 // ─── Akun staff (Supabase Auth + ksc_staff) ───
-const STAFF_ROLES = ['Service Manager','Admin SC','Technician','Sales Manager','Admin'];
+const STAFF_ROLES = ['Admin','Service Manager','Admin SC','Technician','Sales Manager'];
 async function loadStaffList(){
   window._staffLoading = true;
   try { const j = await staffCall({ action:'list' }); window._staffList = j.staff || []; window._staffErr = ''; }
@@ -2256,8 +2367,7 @@ function staffCard(){
 async function staffAdd(){
   const email=(prompt('Email staff (dipakai untuk login):')||'').trim().toLowerCase(); if(!email) return;
   const name=(prompt('Nama lengkap:')||'').trim(); if(!name) return;
-  const role=(prompt('Role — ketik salah satu:\nService Manager / Admin SC / Technician / Sales Manager','Technician')||'').trim();
-  if(!STAFF_ROLES.includes(role)){ toast('Role tidak dikenal','err'); return; }
+  const role='Admin';  // semua staff SC memakai akses penuh
   const password=prompt('Password awal (min 8 karakter).\nKosongkan kalau email ini sudah punya akun di app Kalingga lain:')||'';
   try{ const j=await staffCall({action:'add',email,name,role,password}); toast(j.note||'Staff ditambahkan','ok'); window._staffList=null; renderView('settings'); }
   catch(e){ toast('Gagal: '+e.message,'err'); }
@@ -2392,8 +2502,8 @@ const TRIAL_STATUS = {
 };
 function trialStatusLabel(x){ return (TRIAL_STATUS[x]||{}).label || x; }
 function trialBadge(x){ const t=TRIAL_STATUS[x]||TRIAL_STATUS.pending; return `<span style="background:${t.bg};color:${t.col};border:1px solid ${t.bd};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${t.label}</span>`; }
-function canApproveTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Sales Manager','Service Manager'].includes(r); }
-function canProcessTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Service Manager','Technician'].includes(r); }
+function canApproveTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Admin','Sales Manager','Service Manager'].includes(r); }
+function canProcessTrial(){ const r=(currentUser&&currentUser.role)||''; return ['Admin','Service Manager','Technician'].includes(r); }
 function getSettings(){ if(!DB.settings||typeof DB.settings!=='object') DB.settings={}; return DB.settings; }
 function getSalesManagers(){ const a=getSettings().salesManagers; return Array.isArray(a)?a:[]; }
 function managerEmails(m){ if(!m) return []; if(Array.isArray(m.emails)&&m.emails.length) return m.emails.filter(Boolean); if(m.email) return [m.email]; return []; }
@@ -2499,7 +2609,7 @@ function viewTrials(){
         ${fin?`<button class="btn btn-sm btn-green" onclick="finishTrial('${t.id}')">✓ Selesai</button>`:''}
         <button class="btn btn-sm" onclick="const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none'">Riwayat</button>
         <div style="display:none;width:100%;margin-top:8px;border-top:1px solid var(--b1);padding-top:8px">${hist||'<span class="muted">—</span>'}</div>
-        ${(currentUser&&currentUser.role==='Service Manager')?`<button class="btn btn-sm btn-red" onclick="deleteTrial('${t.id}')">Hapus</button>`:''}
+        ${(currentUser&&['Admin','Service Manager'].includes(currentUser.role))?`<button class="btn btn-sm btn-red" onclick="deleteTrial('${t.id}')">Hapus</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2566,8 +2676,8 @@ function deleteTrial(id){
 function updateTrialBadge(){
   const el=document.getElementById('trial-badge'); if(!el) return;
   const r=(currentUser&&currentUser.role)||''; let n=0;
-  if(['Sales Manager','Service Manager'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='pending').length;
-  if(['Service Manager','Technician'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='approved').length;
+  if(['Admin','Sales Manager','Service Manager'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='pending').length;
+  if(['Admin','Service Manager','Technician'].includes(r)) n+=(DB.trials||[]).filter(t=>t.status==='approved').length;
   if(n>0){ el.textContent=n; el.style.display='inline-block'; } else { el.style.display='none'; }
 }
 function renderTrialResult(q,res,item){
@@ -3391,6 +3501,49 @@ const STALE_DAYS=14;
 function staleDays(t){ return Math.floor((Date.now()-(t.updatedAt||t.createdAt||Date.now()))/86400000); }
 function isActiveTicket(t){ return !['done','delivered','drop'].includes(t.status); }
 function staleTickets(){ return DB.tickets.filter(t=>isActiveTicket(t)&&staleDays(t)>=STALE_DAYS).sort((a,b)=>staleDays(b)-staleDays(a)); }
+
+// ─── SLA OTOMATIS ───
+// Price Offering: 14 hari → Risma FU · 30 hari → Doni telepon · 45 hari → wajib diputuskan (lanjut / Drop + alasan)
+// Indent Part   : 21 hari → wajib No. PO Kärcher + ETA part · ETA lewat → kejar Kärcher
+const SLA={PO_FU:14,PO_CALL:30,PO_DECIDE:45,INDENT_PO:21};
+const _STATUS_LABELS=['Received','Diagnosing','Price Offering','Indent Part','Repairing','Testing','Ready','Delivered','Drop','On-Site'];
+// Sejak kapan ticket berada di status sekarang: entry history terakhir yang mengubah status
+function statusSince(t){
+  if (t.statusSince) return t.statusSince;
+  const cur=statusLabel(t.status); const h=t.history||[]; let since=null;
+  for (let i=h.length-1;i>=0;i--){
+    const a=h[i].action||'';
+    if (a===cur){ since=h[i].ts; continue; }
+    if (_STATUS_LABELS.includes(a) || a==='Ticket Created') break; // status lain → berhenti
+  }
+  return since||t.updatedAt||t.createdAt||Date.now();
+}
+function slaOf(t){
+  const none={level:0,label:'',color:'',days:0,need:''};
+  if (!isActiveTicket(t)) return none;
+  const days=Math.floor((Date.now()-statusSince(t))/86400000);
+  const extended=t.slaExtendedUntil&&t.slaExtendedUntil>Date.now();
+  if (t.status==='price-offering'){
+    if (extended) return {...none,days,info:'SLA diperpanjang s/d '+fmtDateOnly(new Date(t.slaExtendedUntil).toISOString().slice(0,10))};
+    if (days>=SLA.PO_DECIDE) return {level:3,label:'Putuskan: lanjut / Drop',color:'var(--red)',days,need:'decide',hint:'sudah ≥ '+SLA.PO_DECIDE+' hari, tidak boleh dibiarkan'};
+    if (days>=SLA.PO_CALL) return {level:2,label:'Doni telepon customer',color:'var(--orange)',days,need:'call',hint:'≥ '+SLA.PO_CALL+' hari tanpa keputusan'};
+    if (days>=SLA.PO_FU) return {level:1,label:'Risma follow-up',color:'var(--y)',days,need:'fu',hint:'≥ '+SLA.PO_FU+' hari menunggu approval'};
+    return {...none,days};
+  }
+  if (t.status==='indent-part'){
+    if (!t.poNumber){
+      if (days>=SLA.INDENT_PO) return {level:3,label:'Isi No. PO Kärcher',color:'var(--red)',days,need:'po',hint:'≥ '+SLA.INDENT_PO+' hari tanpa nomor PO'};
+      if (days>=STALE_DAYS) return {level:1,label:'Pastikan PO ke Kärcher',color:'var(--y)',days,need:'po',hint:'segera isi No. PO + ETA'};
+      return {...none,days};
+    }
+    if (t.poEta && new Date(t.poEta+'T23:59:59').getTime()<Date.now()) return {level:2,label:'ETA part lewat — kejar Kärcher',color:'var(--orange)',days,need:'eta',hint:'PO '+t.poNumber+' ETA '+fmtDateOnly(t.poEta)};
+    return {...none,days,info:'PO '+t.poNumber+(t.poEta?' · ETA '+fmtDateOnly(t.poEta):'')};
+  }
+  if (staleDays(t)>=STALE_DAYS) return {level:1,label:'Tanpa update '+staleDays(t)+' hari',color:'var(--y)',days,need:'update'};
+  return {...none,days};
+}
+function slaTickets(){ return DB.tickets.map(t=>({t,s:slaOf(t)})).filter(x=>x.s.level>0).sort((a,b)=>b.s.level-a.s.level||b.s.days-a.s.days); }
+function slaBadge(t){ const s=slaOf(t); if(!s.level) return s.info?`<span class="muted" title="${esc(s.info)}">📦 ${esc(s.info)}</span>`:''; return `<span style="color:${s.color};font-weight:700;white-space:nowrap" title="${esc(s.hint||'')}">${s.level>=3?'🔴':s.level===2?'🟠':'🟡'} ${esc(s.label)} · ${s.days}d</span>`; }
 
 // ═══════════════════════════════════════════════
 // KPI SERVICE CENTER (Lapisan 2)
